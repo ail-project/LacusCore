@@ -5,13 +5,14 @@ import hashlib
 import json
 import logging
 import os
+import pickle
 import socket
 
 from base64 import b64decode, b64encode
 from enum import IntEnum, unique
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Literal, Optional, Union, Dict, List, Any, TypedDict, overload
+from typing import Literal, Optional, Union, Dict, List, Any, TypedDict, overload, Tuple
 from uuid import uuid4
 from urllib.parse import urlsplit
 
@@ -20,8 +21,17 @@ from playwrightcapture import Capture, PlaywrightCaptureException
 from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
 from redis import Redis
 from ua_parser import user_agent_parser  # type: ignore
+from werkzeug.utils import secure_filename
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
+
+
+class LacusCoreException(Exception):
+    pass
+
+
+class CaptureError(LacusCoreException):
+    pass
 
 
 @unique
@@ -71,7 +81,7 @@ class CaptureSettings(TypedDict, total=False):
     proxy: Optional[Union[str, Dict[str, str]]]
     general_timeout_in_sec: Optional[int]
     cookies: Optional[List[Dict[str, Any]]]
-    headers: Optional[Dict[str, str]]
+    headers: Optional[Union[str, Dict[str, str]]]
     http_credentials: Optional[Dict[str, int]]
     viewport: Optional[Dict[str, int]]
     referer: Optional[str]
@@ -106,7 +116,7 @@ class LacusCore():
                 proxy: Optional[Union[str, Dict[str, str]]]=None,
                 general_timeout_in_sec: Optional[int]=None,
                 cookies: Optional[List[Dict[str, Any]]]=None,
-                headers: Optional[Dict[str, str]]=None,
+                headers: Optional[Union[str, Dict[str, str]]]=None,
                 http_credentials: Optional[Dict[str, int]]=None,
                 viewport: Optional[Dict[str, int]]=None,
                 referer: Optional[str]=None,
@@ -119,7 +129,7 @@ class LacusCore():
         if url:
             to_enqueue['url'] = url
         elif document_name and document:
-            to_enqueue['document_name'] = document_name
+            to_enqueue['document_name'] = secure_filename(document_name)
             to_enqueue['document'] = document
         else:
             raise Exception('Needs either a URL or a document_name *and* a document.')
@@ -145,8 +155,8 @@ class LacusCore():
             to_enqueue['referer'] = referer
 
         if not force:
-            hash_query = hashlib.sha512(json.dumps(to_enqueue).encode()).hexdigest()
-            if (existing_uuid := self.redis.get(f'query_hash:{hash_query}')):
+            hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
+            if (existing_uuid := self.redis.get(f'lacus:query_hash:{hash_query}')):
                 return existing_uuid.decode()
         perma_uuid = str(uuid4())
 
@@ -160,9 +170,11 @@ class LacusCore():
             elif value is not None:
                 mapping_capture[key] = value  # type: ignore
 
-        self.redis.set(f'query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
-        self.redis.hset(perma_uuid, mapping=mapping_capture)  # type: ignore
-        self.redis.zadd('to_capture', {perma_uuid: priority})
+        p = self.redis.pipeline()
+        p.set(f'lacus:query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
+        p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=mapping_capture)  # type: ignore
+        p.zadd('lacus:to_capture', {perma_uuid: priority})
+        p.execute()
         return perma_uuid
 
     def _decode_response(self, capture: CaptureResponseJson) -> CaptureResponse:
@@ -184,11 +196,11 @@ class LacusCore():
         ...
 
     def get_capture(self, uuid: str, *, decode: bool=False) -> Union[CaptureResponse, CaptureResponseJson]:
-        if self.redis.zscore('to_capture', uuid):
+        if self.redis.zscore('lacus:to_capture', uuid):
             return {'status': CaptureStatus.QUEUED.value}  # type: ignore
-        elif self.redis.sismember('ongoing', uuid):
+        elif self.redis.sismember('lacus:ongoing', uuid):
             return {'status': CaptureStatus.ONGOING.value}  # type: ignore
-        elif response := self.redis.get(uuid):
+        elif response := self.redis.get(f'lacus:capture_results:{uuid}'):
             capture = json.loads(response)
             capture['status'] = CaptureStatus.DONE.value
             if decode:
@@ -197,99 +209,113 @@ class LacusCore():
         else:
             return {'status': CaptureStatus.UNKNOWN.value}  # type: ignore
 
-    async def capture(self, uuid: str) -> bytes:
-        success = True
-        if not self.redis.zscore('to_capture', uuid):
+    async def capture(self, uuid: str) -> Tuple[bool, PlaywrightCaptureResponse]:
+        if self.redis.zscore('lacus:to_capture', uuid) is None:
             # the capture was already done
-            return self.redis.get(uuid)  # type: ignore
+            return self.redis.get(f'lacus:capture_results:{uuid}')  # type: ignore
         p = self.redis.pipeline()
-        p.zrem('to_capture', uuid)  # In case the capture is triggered manually
-        p.sadd('ongoing', uuid)
+        p.zrem('lacus:to_capture', uuid)  # In case the capture is triggered manually
+        p.sadd('lacus:ongoing', uuid)
         p.execute()
-        to_capture = self.redis.hgetall(uuid)
-        result: PlaywrightCaptureResponse
+        try:
+            setting_keys = ['depth', 'rendered_hostname_only', 'url', 'document_name',
+                            'document', 'browser', 'device_name', 'user_agent', 'proxy',
+                            'general_timeout_in_sec', 'cookies', 'headers', 'http_credentials',
+                            'viewport', 'referer']
+            result: PlaywrightCaptureResponse
+            to_capture = {}
+            for k, v in zip(setting_keys, self.redis.hmget(f'lacus:capture_settings:{uuid}', setting_keys)):
+                if v is not None:
+                    to_capture[k] = v if k in ['document'] else v.decode()  # Do not decode the document
+            if not to_capture:
+                result = {'error': f'No capture settings for {uuid}.'}
+                raise CaptureError
 
-        if to_capture.get(b'document'):
-            # we do not have a URL yet.
-            document_name = Path(to_capture[b'document_name'].decode()).name
-            tmp_f = NamedTemporaryFile(suffix=document_name, delete=False)
-            with open(tmp_f.name, "wb") as f:
-                f.write(to_capture[b'document'])
-            url: str = f'file://{tmp_f.name}'
-        elif to_capture.get(b'url'):
-            url = to_capture[b'url'].decode().strip()
-            url = refang(url)  # In case we get a defanged url at this stage.
-            if not url.startswith('data') and not url.startswith('http') and not url.startswith('file'):
-                url = f'http://{url}'
-        else:
-            raise Exception('No valid URL to capture')
-
-        splitted_url = urlsplit(url)
-        if self.only_global_lookups and splitted_url.scheme not in ['data', 'file']:
-            if splitted_url.netloc:
-                if splitted_url.hostname and splitted_url.hostname.split('.')[-1] != 'onion':
-                    try:
-                        ip = socket.gethostbyname(splitted_url.hostname)
-                    except socket.gaierror:
-                        self.logger.info('Name or service not known')
-                        success = False
-                        result = {'error': f'Unable to resolve {splitted_url.hostname}.'}
-                    if not ipaddress.ip_address(ip).is_global:
-                        success = False
-                        result = {'error': 'Capturing ressources on private IPs is disabled.'}
+            if to_capture.get('document'):
+                # we do not have a URL yet.
+                document_name = Path(to_capture['document_name']).name
+                tmp_f = NamedTemporaryFile(suffix=document_name, delete=False)
+                with open(tmp_f.name, "wb") as f:
+                    f.write(to_capture['document'])
+                url: str = f'file://{tmp_f.name}'
+            elif to_capture.get('url'):
+                url = to_capture['url'].strip()
+                url = refang(url)  # In case we get a defanged url at this stage.
+                if not url.startswith('data') and not url.startswith('http') and not url.startswith('file'):
+                    url = f'http://{url}'
             else:
-                success = False
-                result = {'error': 'Unable to find hostname or IP in the query.'}
+                result = {'error': f'No valid URL to capture for {uuid}.'}
+                raise CaptureError
 
-        proxy = to_capture.get(b'proxy')
-        # check if onion
-        if (not proxy and splitted_url.netloc and splitted_url.hostname
-                and splitted_url.hostname.split('.')[-1] == 'onion'):
-            proxy = self.tor_proxy
+            splitted_url = urlsplit(url)
+            if self.only_global_lookups and splitted_url.scheme not in ['data', 'file']:
+                if splitted_url.netloc:
+                    if splitted_url.hostname and splitted_url.hostname.split('.')[-1] != 'onion':
+                        try:
+                            ip = socket.gethostbyname(splitted_url.hostname)
+                        except socket.gaierror:
+                            self.logger.info('Name or service not known')
+                            result = {'error': f'Unable to resolve {splitted_url.hostname}.'}
+                            raise CaptureError
+                        if not ipaddress.ip_address(ip).is_global:
+                            result = {'error': 'Capturing ressources on private IPs is disabled.'}
+                            raise CaptureError
+                else:
+                    result = {'error': 'Unable to find hostname or IP in the query.'}
+                    raise CaptureError
 
-        browser_engine: BROWSER = "chromium"
-        if to_capture.get(b'user_agent'):
-            parsed_string = user_agent_parser.ParseUserAgent(to_capture.get(b'user_agent'))
-            browser_family = parsed_string['family'].lower()
-            if browser_family.startswith('chrom'):
-                browser_engine = 'chromium'
-            elif browser_family.startswith('firefox'):
-                browser_engine = 'firefox'
-            else:
-                browser_engine = 'webkit'
+            proxy = to_capture.get('proxy')
+            # check if onion
+            if (not proxy and splitted_url.netloc and splitted_url.hostname
+                    and splitted_url.hostname.split('.')[-1] == 'onion'):
+                proxy = self.tor_proxy
 
-        if success:
+            browser_engine: BROWSER = "chromium"
+            if to_capture.get('user_agent'):
+                parsed_string = user_agent_parser.ParseUserAgent(to_capture.get('user_agent'))
+                browser_family = parsed_string['family'].lower()
+                if browser_family.startswith('chrom'):
+                    browser_engine = 'chromium'
+                elif browser_family.startswith('firefox'):
+                    browser_engine = 'firefox'
+                else:
+                    browser_engine = 'webkit'
+
             try:
                 async with Capture(browser=browser_engine,
-                                   device_name=to_capture.get(b'device_name'),
+                                   device_name=to_capture.get('device_name'),
                                    proxy=proxy) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
-                    capture.headers = to_capture.get(b'headers')  # type: ignore
-                    if to_capture.get(b'cookies_pseudofile'):
-                        capture.cookies = json.loads(to_capture.get(b'cookies_pseudofile'))  # type: ignore
-                    capture.viewport = to_capture.get(b'viewport')
-                    capture.user_agent = to_capture.get(b'user_agent')  # type: ignore
+                    capture.headers = to_capture.get('headers')  # type: ignore
+                    if to_capture.get('cookies_pseudofile'):
+                        capture.cookies = json.loads(to_capture.get('cookies_pseudofile'))  # type: ignore
+                    capture.viewport = to_capture.get('viewport')
+                    capture.user_agent = to_capture.get('user_agent')  # type: ignore
                     await capture.initialize_context()
-                    result = await capture.capture_page(url, referer=to_capture.get(b'referer'))
+                    result = await capture.capture_page(url, referer=to_capture.get('referer'))
             except PlaywrightCaptureException as e:
                 self.logger.exception(f'Invalid parameters for the capture of {url} - {e}')
-                success = False
                 result = {'error': 'Invalid parameters for the capture of {url} - {e}'}
+                raise CaptureError
             except Exception as e:
                 self.logger.exception(f'Something went poorly {url} - {e}')
-                success = False
                 result = {'error': f'Something went poorly {url} - {e}'}
+                raise CaptureError
 
-        if to_capture.get(b'document'):
-            os.unlink(tmp_f.name)
+            if to_capture.get('document'):
+                os.unlink(tmp_f.name)
 
-        # Overwrite the capture params
-        json_capture = json.dumps(result, default=_json_encode).encode()
-        self.redis.setex(uuid, 36000, json_capture)
-        self.redis.srem('ongoing', uuid)
-
-        if success:
-            self.logger.info(f'Successfully captured {url} - {uuid}')
-        else:
+            # Overwrite the capture params
+            p = self.redis.pipeline()
+            p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
+            p.delete(f'lacus:capture_settings:{uuid}')
+            p.srem('lacus:ongoing', uuid)
+            p.execute()
+        except CaptureError:
+            success = False
             self.logger.warning(f'Unable to capture {url} - {uuid}: {result["error"]}')
-        return json_capture
+        else:
+            success = True
+            self.logger.info(f'Successfully captured {url} - {uuid}')
+        finally:
+            return success, result

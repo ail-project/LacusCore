@@ -170,7 +170,7 @@ docs = ["Sphinx"]
 
 [[package]]
 name = "idna"
-version = "3.3"
+version = "3.4"
 description = "Internationalized Domain Names in Applications (IDNA)"
 category = "main"
 optional = false
@@ -807,6 +807,17 @@ optional = false
 python-versions = ">=3.7"
 
 [[package]]
+name = "Werkzeug"
+version = "2.1.2"
+description = "The comprehensive WSGI web application library."
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.extras]
+watchdog = ["watchdog"]
+
+[[package]]
 name = "zipp"
 version = "3.8.1"
 description = "Backport of pathlib-compatible object wrapper for zip files"
@@ -824,7 +835,7 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "f138f680894a08666f496fda74e6458910c3b7fc283a3a5c82dc305b56262d9d"
+content-hash = "457260d77ed14cb7e8346d8abba6e5332eca8a698d23b58f0e1f5c42d5752071"
 
 [metadata.files]
 alabaster = [
@@ -959,8 +970,8 @@ greenlet = [
     {file = "greenlet-1.1.2.tar.gz", hash = "sha256:e30f5ea4ae2346e62cedde8794a56858a67b878dd79f7df76a0767e356b1744a"},
 ]
 idna = [
-    {file = "idna-3.3-py3-none-any.whl", hash = "sha256:84d9dd047ffa80596e0f246e2eab0b391788b0503584e8945f2368256d2735ff"},
-    {file = "idna-3.3.tar.gz", hash = "sha256:9d643ff0a55b762d5cdb124b8eaa99c66322e2157b69160bc32796e824360e6d"},
+    {file = "idna-3.4-py3-none-any.whl", hash = "sha256:90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2"},
+    {file = "idna-3.4.tar.gz", hash = "sha256:814f528e8dead7d329833b91c5faa87d60bf71824cd12a7530b5526063d02cb4"},
 ]
 imagesize = [
     {file = "imagesize-1.4.1-py2.py3-none-any.whl", hash = "sha256:0d8d18d08f840c19d0ee7ca1fd82490fdc3729b7ac93f49870406ddde8ef8d8b"},
@@ -1355,6 +1366,10 @@ websockets = [
     {file = "websockets-10.1-pp37-pypy37_pp73-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:816ae7dac2c6522cfa620947ead0ca95ac654916eebf515c94d7c28de5601a6e"},
     {file = "websockets-10.1-pp37-pypy37_pp73-win_amd64.whl", hash = "sha256:1dafe98698ece09b8ccba81b910643ff37198e43521d977be76caf37709cf62b"},
     {file = "websockets-10.1.tar.gz", hash = "sha256:181d2b25de5a437b36aefedaf006ecb6fa3aa1328ec0236cdde15f32f9d3ff6d"},
+]
+Werkzeug = [
+    {file = "Werkzeug-2.1.2-py3-none-any.whl", hash = "sha256:72a4b735692dd3135217911cbeaa1be5fa3f62bffb8745c5215420a03dc55255"},
+    {file = "Werkzeug-2.1.2.tar.gz", hash = "sha256:1ce08e8093ed67d638d63879fd1ba3735817f7a80de3674d293f5984f25fb6e6"},
 ]
 zipp = [
     {file = "zipp-3.8.1-py3-none-any.whl", hash = "sha256:47c40d7fe183a6f21403a199b3e4192cca5774656965b0a4988ad2f8feb5f009"},
