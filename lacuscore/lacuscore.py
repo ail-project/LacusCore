@@ -282,6 +282,7 @@ class LacusCore():
                     browser_engine = 'webkit'
 
             try:
+                self.logger.info(f'Capturing {url}')
                 async with Capture(browser=browser_engine,
                                    device_name=to_capture.get('device_name'),
                                    proxy=proxy) as capture:
@@ -305,12 +306,6 @@ class LacusCore():
             if to_capture.get('document'):
                 os.unlink(tmp_f.name)
 
-            # Overwrite the capture params
-            p = self.redis.pipeline()
-            p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
-            p.delete(f'lacus:capture_settings:{uuid}')
-            p.srem('lacus:ongoing', uuid)
-            p.execute()
         except CaptureError:
             success = False
             self.logger.warning(f'Unable to capture {url} - {uuid}: {result["error"]}')
@@ -318,4 +313,9 @@ class LacusCore():
             success = True
             self.logger.info(f'Successfully captured {url} - {uuid}')
         finally:
+            p = self.redis.pipeline()
+            p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
+            p.delete(f'lacus:capture_settings:{uuid}')
+            p.srem('lacus:ongoing', uuid)
+            p.execute()
             return success, result
