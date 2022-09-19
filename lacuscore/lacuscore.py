@@ -288,8 +288,8 @@ class LacusCore():
                                    proxy=proxy) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.get('headers')  # type: ignore
-                    if to_capture.get('cookies_pseudofile'):
-                        capture.cookies = json.loads(to_capture.get('cookies_pseudofile'))  # type: ignore
+                    if to_capture.get('cookies'):
+                        capture.cookies = json.loads(to_capture.get('cookies'))  # type: ignore
                     capture.viewport = to_capture.get('viewport')
                     capture.user_agent = to_capture.get('user_agent')  # type: ignore
                     await capture.initialize_context()
@@ -303,9 +303,6 @@ class LacusCore():
                 result = {'error': f'Something went poorly {url} - {e}'}
                 raise CaptureError
 
-            if to_capture.get('document'):
-                os.unlink(tmp_f.name)
-
         except CaptureError:
             success = False
             self.logger.warning(f'Unable to capture {url} - {uuid}: {result["error"]}')
@@ -313,6 +310,10 @@ class LacusCore():
             success = True
             self.logger.info(f'Successfully captured {url} - {uuid}')
         finally:
+
+            if to_capture.get('document'):
+                os.unlink(tmp_f.name)
+
             p = self.redis.pipeline()
             p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
             p.delete(f'lacus:capture_settings:{uuid}')
