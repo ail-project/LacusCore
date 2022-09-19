@@ -6,7 +6,9 @@ import json
 import logging
 import os
 import pickle
+import re
 import socket
+import unicodedata
 
 from base64 import b64decode, b64encode
 from enum import IntEnum, unique
@@ -21,9 +23,26 @@ from playwrightcapture import Capture, PlaywrightCaptureException
 from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
 from redis import Redis
 from ua_parser import user_agent_parser  # type: ignore
-from werkzeug.utils import secure_filename
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
+
+
+def _secure_filename(filename: str) -> str:
+    """Copy of secure_filename in werkzeug, to avoid the dependency.
+    Source: https://github.com/pallets/werkzeug/blob/d36aaf12b5d12634844e4c7f5dab4a8282688e12/src/werkzeug/utils.py#L197
+    """
+    _filename_ascii_strip_re = re.compile(r"[^A-Za-z0-9_.-]")
+    filename = unicodedata.normalize("NFKD", filename)
+    filename = filename.encode("ascii", "ignore").decode("ascii")
+
+    for sep in os.path.sep, os.path.altsep:
+        if sep:
+            filename = filename.replace(sep, " ")
+    filename = str(_filename_ascii_strip_re.sub("", "_".join(filename.split()))).strip(
+        "._"
+    )
+
+    return filename
 
 
 class LacusCoreException(Exception):
@@ -129,7 +148,7 @@ class LacusCore():
         if url:
             to_enqueue['url'] = url
         elif document_name and document:
-            to_enqueue['document_name'] = secure_filename(document_name)
+            to_enqueue['document_name'] = _secure_filename(document_name)
             to_enqueue['document'] = document
         else:
             raise Exception('Needs either a URL or a document_name *and* a document.')
