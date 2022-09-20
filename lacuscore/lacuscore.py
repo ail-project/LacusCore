@@ -14,7 +14,7 @@ from base64 import b64decode, b64encode
 from enum import IntEnum, unique
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Literal, Optional, Union, Dict, List, Any, TypedDict, overload, Tuple
+from typing import Literal, Optional, Union, Dict, List, Any, TypedDict, overload, Tuple, cast
 from uuid import uuid4
 from urllib.parse import urlsplit
 
@@ -194,17 +194,19 @@ class LacusCore():
         p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=mapping_capture)  # type: ignore
         p.zadd('lacus:to_capture', {perma_uuid: priority})
         p.execute()
+        print(perma_uuid)
         return perma_uuid
 
     def _decode_response(self, capture: CaptureResponseJson) -> CaptureResponse:
-        if capture.get('png'):
-            capture['png'] = b64decode(capture['png'])  # type: ignore
-        if capture.get('downloaded_file'):
-            capture['downloaded_file'] = b64decode(capture['downloaded_file'])  # type: ignore
+        decoded_capture = cast(CaptureResponse, capture)
+        if capture.get('png') and capture['png']:
+            decoded_capture['png'] = b64decode(capture['png'])
+        if capture.get('downloaded_file') and capture['downloaded_file']:
+            decoded_capture['downloaded_file'] = b64decode(capture['downloaded_file'])
         if capture.get('children') and capture['children']:
             for child in capture['children']:
                 child = self._decode_response(child)
-        return capture  # type: ignore
+        return decoded_capture
 
     @overload
     def get_capture(self, uuid: str, *, decode: Literal[True]=True) -> CaptureResponse:
@@ -215,23 +217,40 @@ class LacusCore():
         ...
 
     def get_capture(self, uuid: str, *, decode: bool=False) -> Union[CaptureResponse, CaptureResponseJson]:
+        to_return: CaptureResponseJson = {'status': CaptureStatus.UNKNOWN}
         if self.redis.zscore('lacus:to_capture', uuid):
-            return {'status': CaptureStatus.QUEUED.value}  # type: ignore
+            to_return['status'] = CaptureStatus.QUEUED
         elif self.redis.sismember('lacus:ongoing', uuid):
-            return {'status': CaptureStatus.ONGOING.value}  # type: ignore
+            to_return['status'] = CaptureStatus.ONGOING
         elif response := self.redis.get(f'lacus:capture_results:{uuid}'):
-            capture = json.loads(response)
-            capture['status'] = CaptureStatus.DONE.value
+            to_return['status'] = CaptureStatus.DONE
+            to_return.update(json.loads(response))
             if decode:
-                return self._decode_response(capture)
-            return capture
-        else:
-            return {'status': CaptureStatus.UNKNOWN.value}  # type: ignore
+                return self._decode_response(to_return)
+        return to_return
 
-    async def capture(self, uuid: str) -> Tuple[bool, PlaywrightCaptureResponse]:
-        if self.redis.zscore('lacus:to_capture', uuid) is None:
-            # the capture was already done
-            return self.redis.get(f'lacus:capture_results:{uuid}')  # type: ignore
+    def get_capture_status(self, uuid: str) -> CaptureStatus:
+        if self.redis.zscore('lacus:to_capture', uuid):
+            return CaptureStatus.QUEUED
+        elif self.redis.sismember('lacus:ongoing', uuid):
+            return CaptureStatus.ONGOING
+        elif self.redis.exists(f'lacus:capture_results:{uuid}'):
+            return CaptureStatus.DONE
+        return CaptureStatus.UNKNOWN
+
+    async def consume_queue(self) -> Optional[str]:
+        value: List[Tuple[bytes, float]] = self.redis.zpopmax('lacus:to_capture')
+        if not value or not value[0]:
+            return None
+        uuid: str = value[0][0].decode()
+        await self.capture(uuid)
+        return uuid
+
+    async def capture(self, uuid: str):
+        if self.redis.sismember('lacus:ongoing', uuid):
+            # the capture is ongoing
+            return
+
         p = self.redis.pipeline()
         p.zrem('lacus:to_capture', uuid)  # In case the capture is triggered manually
         p.sadd('lacus:ongoing', uuid)
@@ -323,10 +342,8 @@ class LacusCore():
                 raise CaptureError
 
         except CaptureError:
-            success = False
             self.logger.warning(f'Unable to capture {url} - {uuid}: {result["error"]}')
         else:
-            success = True
             self.logger.info(f'Successfully captured {url} - {uuid}')
         finally:
 
@@ -338,4 +355,3 @@ class LacusCore():
             p.delete(f'lacus:capture_settings:{uuid}')
             p.srem('lacus:ongoing', uuid)
             p.execute()
-            return success, result

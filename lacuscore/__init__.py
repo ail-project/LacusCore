@@ -1,1 +1,1 @@
-from .lacuscore import LacusCore  # noqa
+from .lacuscore import LacusCore, CaptureStatus  # noqa
