@@ -127,7 +127,13 @@ class LacusCore():
     def check_redis_up(self):
         return self.redis.ping()
 
-    def enqueue(self, *, url: Optional[str]=None,
+    @overload
+    def enqueue(self, *, settings: Optional[CaptureSettings]=None) -> str:
+        ...
+
+    @overload
+    def enqueue(self, *,
+                url: Optional[str]=None,
                 document_name: Optional[str]=None, document: Optional[str]=None,
                 depth: int=0,
                 browser: Optional[BROWSER]=None, device_name: Optional[str]=None,
@@ -144,39 +150,66 @@ class LacusCore():
                 recapture_interval: int=300,
                 priority: int=0
                 ) -> str:
-        to_enqueue: CaptureSettings = {'depth': depth, 'rendered_hostname_only': rendered_hostname_only}
-        if url:
-            to_enqueue['url'] = url
-        elif document_name and document:
-            to_enqueue['document_name'] = _secure_filename(document_name)
-            to_enqueue['document'] = document
+        pass
+
+    def enqueue(self, *,
+                settings: Optional[CaptureSettings]=None,
+                url: Optional[str]=None,
+                document_name: Optional[str]=None, document: Optional[str]=None,
+                depth: int=0,
+                browser: Optional[BROWSER]=None, device_name: Optional[str]=None,
+                user_agent: Optional[str]=None,
+                proxy: Optional[Union[str, Dict[str, str]]]=None,
+                general_timeout_in_sec: Optional[int]=None,
+                cookies: Optional[List[Dict[str, Any]]]=None,
+                headers: Optional[Union[str, Dict[str, str]]]=None,
+                http_credentials: Optional[Dict[str, int]]=None,
+                viewport: Optional[Dict[str, int]]=None,
+                referer: Optional[str]=None,
+                rendered_hostname_only: bool=True,
+                force: bool=False,
+                recapture_interval: int=300,
+                priority: int=0
+                ) -> str:
+        to_enqueue: CaptureSettings
+        if settings:
+            to_enqueue = settings
         else:
-            raise Exception('Needs either a URL or a document_name *and* a document.')
-        if browser:
-            to_enqueue['browser'] = browser
-        if device_name:
-            to_enqueue['device_name'] = device_name
-        if user_agent:
-            to_enqueue['user_agent'] = user_agent
-        if proxy:
-            to_enqueue['proxy'] = proxy
-        if general_timeout_in_sec is not None:  # that would be a terrible idea, but this one could be 0
-            to_enqueue['general_timeout_in_sec'] = general_timeout_in_sec
-        if cookies:
-            to_enqueue['cookies'] = cookies
-        if headers:
-            to_enqueue['headers'] = headers
-        if http_credentials:
-            to_enqueue['http_credentials'] = http_credentials
-        if viewport:
-            to_enqueue['viewport'] = viewport
-        if referer:
-            to_enqueue['referer'] = referer
+            to_enqueue = {'depth': depth, 'rendered_hostname_only': rendered_hostname_only}
+            if url:
+                to_enqueue['url'] = url
+            elif document_name and document:
+                to_enqueue['document_name'] = _secure_filename(document_name)
+                to_enqueue['document'] = document
+            else:
+                raise Exception('Needs either a URL or a document_name *and* a document.')
+            if browser:
+                to_enqueue['browser'] = browser
+            if device_name:
+                to_enqueue['device_name'] = device_name
+            if user_agent:
+                to_enqueue['user_agent'] = user_agent
+            if proxy:
+                to_enqueue['proxy'] = proxy
+            if general_timeout_in_sec is not None:  # that would be a terrible idea, but this one could be 0
+                to_enqueue['general_timeout_in_sec'] = general_timeout_in_sec
+            if cookies:
+                to_enqueue['cookies'] = cookies
+            if headers:
+                to_enqueue['headers'] = headers
+            if http_credentials:
+                to_enqueue['http_credentials'] = http_credentials
+            if viewport:
+                to_enqueue['viewport'] = viewport
+            if referer:
+                to_enqueue['referer'] = referer
 
         if not force:
             hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
             if (existing_uuid := self.redis.get(f'lacus:query_hash:{hash_query}')):
-                return existing_uuid.decode()
+                if isinstance(existing_uuid, bytes):
+                    return existing_uuid.decode()
+                return existing_uuid
         perma_uuid = str(uuid4())
 
         mapping_capture: Dict[str, Union[bytes, float, int, str]] = {}
@@ -194,7 +227,6 @@ class LacusCore():
         p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=mapping_capture)  # type: ignore
         p.zadd('lacus:to_capture', {perma_uuid: priority})
         p.execute()
-        print(perma_uuid)
         return perma_uuid
 
     def _decode_response(self, capture: CaptureResponseJson) -> CaptureResponse:
