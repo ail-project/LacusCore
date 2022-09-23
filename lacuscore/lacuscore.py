@@ -181,8 +181,6 @@ class LacusCore():
             elif document_name and document:
                 to_enqueue['document_name'] = _secure_filename(document_name)
                 to_enqueue['document'] = document
-            else:
-                raise Exception('Needs either a URL or a document_name *and* a document.')
             if browser:
                 to_enqueue['browser'] = browser
             if device_name:
@@ -314,7 +312,7 @@ class LacusCore():
                 if not url.startswith('data') and not url.startswith('http') and not url.startswith('file'):
                     url = f'http://{url}'
             else:
-                result = {'error': f'No valid URL to capture for {uuid}.'}
+                result = {'error': f'No valid URL to capture for {uuid} - {to_capture}'}
                 raise CaptureError
 
             splitted_url = urlsplit(url)
