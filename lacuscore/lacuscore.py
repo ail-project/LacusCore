@@ -204,8 +204,8 @@ class LacusCore():
             if referer:
                 to_enqueue['referer'] = referer
 
+        hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
         if not force:
-            hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
             if (existing_uuid := self.redis.get(f'lacus:query_hash:{hash_query}')):
                 if isinstance(existing_uuid, bytes):
                     return existing_uuid.decode()
@@ -337,7 +337,7 @@ class LacusCore():
             proxy = to_capture.get('proxy')
             # check if onion
             if (not proxy and splitted_url.netloc and splitted_url.hostname
-                    and splitted_url.hostname.split('.')[-1] == 'onion'):
+                    and splitted_url.hostname.split('.')[-1] == 'onion') or proxy=='tor' or proxy=='tor_proxy':
                 proxy = self.tor_proxy
 
             browser_engine: BROWSER = "chromium"
