@@ -181,8 +181,6 @@ class LacusCore():
             elif document_name and document:
                 to_enqueue['document_name'] = _secure_filename(document_name)
                 to_enqueue['document'] = document
-            else:
-                raise Exception('Needs either a URL or a document_name *and* a document.')
             if browser:
                 to_enqueue['browser'] = browser
             if device_name:
@@ -301,20 +299,21 @@ class LacusCore():
                 result = {'error': f'No capture settings for {uuid}.'}
                 raise CaptureError
 
+            url: str = ''
             if to_capture.get('document'):
                 # we do not have a URL yet.
                 document_name = Path(to_capture['document_name']).name
                 tmp_f = NamedTemporaryFile(suffix=document_name, delete=False)
                 with open(tmp_f.name, "wb") as f:
                     f.write(to_capture['document'])
-                url: str = f'file://{tmp_f.name}'
+                url = f'file://{tmp_f.name}'
             elif to_capture.get('url'):
                 url = to_capture['url'].strip()
                 url = refang(url)  # In case we get a defanged url at this stage.
                 if not url.startswith('data') and not url.startswith('http') and not url.startswith('file'):
                     url = f'http://{url}'
             else:
-                result = {'error': f'No valid URL to capture for {uuid}.'}
+                result = {'error': f'No valid URL to capture for {uuid} - {to_capture}'}
                 raise CaptureError
 
             splitted_url = urlsplit(url)
@@ -326,6 +325,9 @@ class LacusCore():
                         except socket.gaierror:
                             self.logger.info('Name or service not known')
                             result = {'error': f'Unable to resolve {splitted_url.hostname}.'}
+                            raise CaptureError
+                        except Exception as e:
+                            result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}.'}
                             raise CaptureError
                         if not ipaddress.ip_address(ip).is_global:
                             result = {'error': 'Capturing ressources on private IPs is disabled.'}
@@ -374,7 +376,10 @@ class LacusCore():
                 raise CaptureError
 
         except CaptureError:
-            self.logger.warning(f'Unable to capture {url} - {uuid}: {result["error"]}')
+            if url:
+                self.logger.warning(f'Unable to capture {url} - {uuid}: {result["error"]}')
+            else:
+                self.logger.warning(f'Unable to capture {uuid}: {result["error"]}')
         else:
             self.logger.info(f'Successfully captured {url} - {uuid}')
         finally:
