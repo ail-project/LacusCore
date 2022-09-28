@@ -30,6 +30,7 @@ python = "^3.8"
 requests = "^2.28.1"
 Sphinx = { version = "^5.2.2", optional = true }
 playwrightcapture = "^1.15.3"
+defang = "^0.5.3"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.981"

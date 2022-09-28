@@ -142,6 +142,14 @@ optional = false
 python-versions = ">=3.5"
 
 [[package]]
+name = "defang"
+version = "0.5.3"
+description = "Defangs and refangs malicious URLs"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "docutils"
 version = "0.19"
 description = "Docutils -- Python Documentation Utilities"
@@ -827,7 +835,7 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "74be3fda5806b145e3d029598d66876c04db108fbb510305ead05838a9a26bc5"
+content-hash = "7c21acf0271277fa10fbf918080a2ffe216a0dc4fdeaf4e2ec7f4acdc23cb4dd"
 
 [metadata.files]
 alabaster = [
@@ -895,6 +903,9 @@ dateparser = [
 decorator = [
     {file = "decorator-5.1.1-py3-none-any.whl", hash = "sha256:b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186"},
     {file = "decorator-5.1.1.tar.gz", hash = "sha256:637996211036b6385ef91435e4fae22989472f9d571faba8927ba8253acbc330"},
+]
+defang = [
+    {file = "defang-0.5.3.tar.gz", hash = "sha256:86aeff658d7cd4c3b61d16089872e1c1f0a1b7b3c64d4ca9525c017caeb284d7"},
 ]
 docutils = [
     {file = "docutils-0.19-py3-none-any.whl", hash = "sha256:5e1de4d849fee02c63b040a4a3fd567f4ab104defd8a5511fbbc24a8a017efbc"},
