@@ -338,8 +338,11 @@ class LacusCore():
 
             proxy = to_capture.get('proxy')
             # check if onion
-            if (not proxy and splitted_url.netloc and splitted_url.hostname
-                    and splitted_url.hostname.split('.')[-1] == 'onion') or proxy=='tor' or proxy=='tor_proxy':
+            if (proxy == 'force_tor'
+                    or (not proxy
+                        and splitted_url.netloc
+                        and splitted_url.hostname
+                        and splitted_url.hostname.split('.')[-1] == 'onion')):
                 proxy = self.tor_proxy
 
             browser_engine: BROWSER = "chromium"
