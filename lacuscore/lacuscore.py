@@ -337,13 +337,14 @@ class LacusCore():
                     raise CaptureError
 
             proxy = to_capture.get('proxy')
-            # check if onion
-            if (proxy == 'force_tor'
-                    or (not proxy
-                        and splitted_url.netloc
-                        and splitted_url.hostname
-                        and splitted_url.hostname.split('.')[-1] == 'onion')):
-                proxy = self.tor_proxy
+            if self.tor_proxy:
+                # check if onion
+                if (proxy == 'force_tor'
+                        or (not proxy
+                            and splitted_url.netloc
+                            and splitted_url.hostname
+                            and splitted_url.hostname.split('.')[-1] == 'onion')):
+                    proxy = self.tor_proxy
 
             browser_engine: BROWSER = "chromium"
             if to_capture.get('user_agent'):
