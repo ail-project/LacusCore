@@ -404,7 +404,7 @@ class LacusCore():
                 self.redis.setex(f'lacus:capture_retry:{uuid}', 300, self.max_retries)
             else:
                 self.redis.decr(f'lacus:capture_retry:{uuid}')
-            if current_retry is None or current_retry > 0:
+            if current_retry is None or int(current_retry.decode()) > 0:
                 # Just wait a little bit before retrying, expecially if it is the only capture in the queue
                 await asyncio.sleep(5)
                 retry = True
