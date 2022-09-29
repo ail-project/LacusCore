@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import asyncio
 import ipaddress
 import hashlib
 import json
@@ -50,6 +51,10 @@ class LacusCoreException(Exception):
 
 
 class CaptureError(LacusCoreException):
+    pass
+
+
+class RetryCapture(LacusCoreException):
     pass
 
 
@@ -116,13 +121,14 @@ def _json_encode(obj: Union[bytes]) -> str:
 
 class LacusCore():
 
-    def __init__(self, redis_connector: Redis, tor_proxy: Optional[str]=None, only_global_lookups: bool=True) -> None:
+    def __init__(self, redis_connector: Redis, tor_proxy: Optional[str]=None, only_global_lookups: bool=True, max_retries: int=3) -> None:
         self.logger = logging.getLogger(f'{self.__class__.__name__}')
         self.logger.setLevel('INFO')
 
         self.redis = redis_connector
         self.tor_proxy = tor_proxy
         self.only_global_lookups = only_global_lookups
+        self.max_retries = max_retries
 
     def check_redis_up(self):
         return self.redis.ping()
@@ -276,15 +282,24 @@ class LacusCore():
         await self.capture(uuid)
         return uuid
 
-    async def capture(self, uuid: str):
+    async def capture(self, uuid: str, score: Optional[Union[float, int]]=None):
         if self.redis.sismember('lacus:ongoing', uuid):
             # the capture is ongoing
             return
 
-        p = self.redis.pipeline()
-        p.zrem('lacus:to_capture', uuid)  # In case the capture is triggered manually
-        p.sadd('lacus:ongoing', uuid)
-        p.execute()
+        retry = False
+        current_score: float = 0.0
+        if score is not None:
+            if isinstance(score, int):
+                current_score = float(score)
+            else:
+                current_score = score
+        if (s := self.redis.zscore('lacus:to_capture', uuid)) is not None:
+            # In case the capture is triggered manually
+            self.redis.zrem('lacus:to_capture', uuid)
+            current_score = s
+
+        self.redis.sadd('lacus:ongoing', uuid)
         try:
             setting_keys = ['depth', 'rendered_hostname_only', 'url', 'document_name',
                             'document', 'browser', 'device_name', 'user_agent', 'proxy',
@@ -323,9 +338,9 @@ class LacusCore():
                         try:
                             ip = socket.gethostbyname(splitted_url.hostname)
                         except socket.gaierror:
-                            self.logger.info('Name or service not known')
+                            self.logger.info(f'Unable to resolve {splitted_url.hostname}.')
                             result = {'error': f'Unable to resolve {splitted_url.hostname}.'}
-                            raise CaptureError
+                            raise RetryCapture
                         except Exception as e:
                             result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}.'}
                             raise CaptureError
@@ -379,6 +394,20 @@ class LacusCore():
                 result = {'error': f'Something went poorly {url} - {e}'}
                 raise CaptureError
 
+            if hasattr(capture, 'should_retry') and capture.should_retry:
+                # PlaywrightCapture considers this capture elligible for a retry
+                self.logger.info(f'PlaywrightCapture considers {uuid} elligible for a retry.')
+                raise RetryCapture
+        except RetryCapture:
+            # Check if we already re-tried this capture
+            if (current_retry := self.redis.get(f'lacus:capture_retry:{uuid}')) is None:
+                self.redis.setex(f'lacus:capture_retry:{uuid}', 300, self.max_retries)
+            else:
+                self.redis.decr(f'lacus:capture_retry:{uuid}')
+            if current_retry is None or current_retry > 0:
+                # Just wait a little bit before retrying, expecially if it is the only capture in the queue
+                await asyncio.sleep(5)
+                retry = True
         except CaptureError:
             if url:
                 self.logger.warning(f'Unable to capture {url} - {uuid}: {result["error"]}')
@@ -392,7 +421,10 @@ class LacusCore():
                 os.unlink(tmp_f.name)
 
             p = self.redis.pipeline()
-            p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
-            p.delete(f'lacus:capture_settings:{uuid}')
+            if retry:
+                p.zadd('lacus:to_capture', {uuid: current_score - 1})
+            else:
+                p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
+                p.delete(f'lacus:capture_settings:{uuid}')
             p.srem('lacus:ongoing', uuid)
             p.execute()
