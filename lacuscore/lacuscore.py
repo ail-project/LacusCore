@@ -122,6 +122,12 @@ def _json_encode(obj: Union[bytes]) -> str:
 class LacusCore():
 
     def __init__(self, redis_connector: Redis, tor_proxy: Optional[str]=None, only_global_lookups: bool=True, max_retries: int=3) -> None:
+        """Capture URLs or web enabled documetns using PlaywrightCapture.
+        :param redis_connector: Pre-configured connector to a redis instance.
+        :param tor_proxy: URL to a SOCKS 5 tor proxy. If you have tor installed, this is the default: socks5://127.0.0.1:9050.
+        :param only_global_lookups: Discard captures that point to non-public IPs.
+        :param max_retries: How many times should we re-try a capture if it failed.
+        """
         self.logger = logging.getLogger(f'{self.__class__.__name__}')
         self.logger.setLevel('INFO')
 
