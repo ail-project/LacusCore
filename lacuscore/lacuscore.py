@@ -109,6 +109,9 @@ class CaptureSettings(TypedDict, total=False):
     http_credentials: Optional[Dict[str, int]]
     viewport: Optional[Dict[str, int]]
     referer: Optional[str]
+    force: Optional[bool]
+    recapture_interval: Optional[int]
+    priority: Optional[int]
 
     depth: Optional[int]
     rendered_hostname_only: bool  # Note: only used if depth is > 0
@@ -185,6 +188,12 @@ class LacusCore():
                 ) -> str:
         to_enqueue: CaptureSettings
         if settings:
+            if settings.get('force') is not None:
+                force = settings.pop('force')  # type: ignore
+            if settings.get('recapture_interval') is not None:
+                recapture_interval = settings.pop('recapture_interval')  # type: ignore
+            if settings.get('priority') is not None:
+                priority = settings.pop('priority')  # type: ignore
             to_enqueue = settings
         else:
             to_enqueue = {'depth': depth, 'rendered_hostname_only': rendered_hostname_only}
