@@ -347,11 +347,22 @@ class LacusCore():
                 raise CaptureError
 
             splitted_url = urlsplit(url)
-            if self.only_global_lookups and splitted_url.scheme not in ['data', 'file']:
+            proxy = to_capture.get('proxy')
+            if self.tor_proxy:
+                # check if onion or forced
+                if (proxy == 'force_tor'
+                        or (not proxy
+                            and splitted_url.netloc
+                            and splitted_url.hostname
+                            and splitted_url.hostname.split('.')[-1] == 'onion')):
+                    proxy = self.tor_proxy
+
+            if self.only_global_lookups and not proxy and splitted_url.scheme not in ['data', 'file']:
+                # not relevant if we also have a proxy, or the thing to capture is a data URI or a file on disk
                 if splitted_url.netloc:
                     if splitted_url.hostname and splitted_url.hostname.split('.')[-1] != 'onion':
                         try:
-                            ip = socket.gethostbyname(splitted_url.hostname)
+                            ips_info = socket.getaddrinfo(splitted_url.hostname, None, proto=socket.IPPROTO_TCP)
                         except socket.gaierror:
                             self.logger.info(f'Unable to resolve {splitted_url.hostname}.')
                             result = {'error': f'Unable to resolve {splitted_url.hostname}.'}
@@ -359,22 +370,13 @@ class LacusCore():
                         except Exception as e:
                             result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}.'}
                             raise CaptureError
-                        if not ipaddress.ip_address(ip).is_global:
-                            result = {'error': 'Capturing ressources on private IPs is disabled.'}
-                            raise CaptureError
+                        for info in ips_info:
+                            if not ipaddress.ip_address(info[-1][0]).is_global:
+                                result = {'error': f'Capturing ressources on private IPs {info[-1][0]} is disabled.'}
+                                raise CaptureError
                 else:
-                    result = {'error': 'Unable to find hostname or IP in the query.'}
+                    result = {'error': f'Unable to find hostname or IP in the query: {url}.'}
                     raise CaptureError
-
-            proxy = to_capture.get('proxy')
-            if self.tor_proxy:
-                # check if onion
-                if (proxy == 'force_tor'
-                        or (not proxy
-                            and splitted_url.netloc
-                            and splitted_url.hostname
-                            and splitted_url.hostname.split('.')[-1] == 'onion')):
-                    proxy = self.tor_proxy
 
             browser_engine: BROWSER = "chromium"
             if to_capture.get('user_agent'):
