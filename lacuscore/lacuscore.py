@@ -320,7 +320,7 @@ class LacusCore():
                             'document', 'browser', 'device_name', 'user_agent', 'proxy',
                             'general_timeout_in_sec', 'cookies', 'headers', 'http_credentials',
                             'viewport', 'referer']
-            result: PlaywrightCaptureResponse
+            result: PlaywrightCaptureResponse = {}
             to_capture = {}
             for k, v in zip(setting_keys, self.redis.hmget(f'lacus:capture_settings:{uuid}', setting_keys)):
                 if v is not None:
@@ -426,6 +426,9 @@ class LacusCore():
                 await asyncio.sleep(5)
                 retry = True
         except CaptureError:
+            if not result:
+                result = {'error': "No result key, shouldn't happen"}
+                self.logger.exception(f'Unable to capture {uuid}: {result["error"]}')
             if url:
                 self.logger.warning(f'Unable to capture {url} - {uuid}: {result["error"]}')
             else:
