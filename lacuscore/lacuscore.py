@@ -113,7 +113,7 @@ class CaptureSettings(TypedDict, total=False):
     recapture_interval: Optional[int]
     priority: Optional[int]
 
-    depth: Optional[int]
+    depth: int
     rendered_hostname_only: bool  # Note: only used if depth is > 0
 
 
@@ -321,24 +321,51 @@ class LacusCore():
                             'general_timeout_in_sec', 'cookies', 'headers', 'http_credentials',
                             'viewport', 'referer']
             result: PlaywrightCaptureResponse = {}
-            to_capture = {}
+            to_capture: CaptureSettings = {}
+            document_as_bytes = b''
             for k, v in zip(setting_keys, self.redis.hmget(f'lacus:capture_settings:{uuid}', setting_keys)):
-                if v is not None:
-                    to_capture[k] = v if k in ['document'] else v.decode()  # Do not decode the document
+                if v is None:
+                    continue
+                if k in ['url', 'document_name', 'browser', 'device_name', 'user_agent', 'referer']:
+                    # string
+                    to_capture[k] = v.decode()  # type: ignore
+                elif k in ['cookies', 'http_credentials', 'viewport']:
+                    # dicts or list
+                    to_capture[k] = json.loads(v)  # type: ignore
+                elif k in ['proxy', 'headers']:
+                    # can be dict or str
+                    if v[0] == b'{':
+                        to_capture[k] = json.loads(v)  # type: ignore
+                    else:
+                        to_capture[k] = v.decode()  # type: ignore
+                elif k in ['general_timeout_in_sec', 'depth']:
+                    # int
+                    to_capture[k] = int(v)  # type: ignore
+                elif k in ['rendered_hostname_only']:
+                    # bool
+                    to_capture[k] = bool(int(v))  # type: ignore
+                elif k == 'document':
+                    document_as_bytes = b64decode(v)
+                else:
+                    raise LacusCoreException(f'Unexpected setting: {k}: {v}')
+
             if not to_capture:
                 result = {'error': f'No capture settings for {uuid}.'}
                 raise CaptureError
 
             url: str = ''
-            if to_capture.get('document'):
+            if document_as_bytes:
                 # we do not have a URL yet.
-                document_name = Path(to_capture['document_name']).name
+                name = to_capture.pop('document_name', None)
+                if not name:
+                    raise LacusCoreException('No document name provided, settings are invalid')
+                document_name = Path(name).name
                 tmp_f = NamedTemporaryFile(suffix=document_name, delete=False)
                 with open(tmp_f.name, "wb") as f:
-                    f.write(to_capture['document'])
+                    f.write(document_as_bytes)
                 url = f'file://{tmp_f.name}'
             elif to_capture.get('url'):
-                url = to_capture['url'].strip()
+                url = to_capture['url'].strip()  # type: ignore
                 url = refang(url)  # In case we get a defanged url at this stage.
                 if not url.startswith('data') and not url.startswith('http') and not url.startswith('file'):
                     url = f'http://{url}'
@@ -393,15 +420,19 @@ class LacusCore():
                 self.logger.info(f'Capturing {url}')
                 async with Capture(browser=browser_engine,
                                    device_name=to_capture.get('device_name'),
-                                   proxy=proxy) as capture:
+                                   proxy=proxy,
+                                   general_timeout_in_sec=to_capture.get('general_timeout_in_sec')) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.get('headers')  # type: ignore
                     if to_capture.get('cookies'):
                         capture.cookies = json.loads(to_capture.get('cookies'))  # type: ignore
-                    capture.viewport = to_capture.get('viewport')
+                    capture.viewport = to_capture.get('viewport')  # type: ignore
                     capture.user_agent = to_capture.get('user_agent')  # type: ignore
                     await capture.initialize_context()
-                    result = await capture.capture_page(url, referer=to_capture.get('referer'))
+                    result = await capture.capture_page(
+                        url, referer=to_capture.get('referer'),
+                        depth=to_capture.get('depth', 0),
+                        rendered_hostname_only=to_capture.get('rendered_hostname_only', True))
             except PlaywrightCaptureException as e:
                 self.logger.exception(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': 'Invalid parameters for the capture of {url} - {e}'}
