@@ -424,8 +424,7 @@ class LacusCore():
                                    general_timeout_in_sec=to_capture.get('general_timeout_in_sec')) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.get('headers')  # type: ignore
-                    if to_capture.get('cookies'):
-                        capture.cookies = json.loads(to_capture.get('cookies'))  # type: ignore
+                    capture.cookies = to_capture.get('cookies')  # type: ignore
                     capture.viewport = to_capture.get('viewport')  # type: ignore
                     capture.user_agent = to_capture.get('user_agent')  # type: ignore
                     await capture.initialize_context()
