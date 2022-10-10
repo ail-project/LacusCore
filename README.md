@@ -35,3 +35,44 @@ The recommended way to use this module is as follows:
     I this case, you should use `get_capture_status` to check if the capture is over before the last step.
 
 3. Get the capture result with `get_capture` with the UUID from you got from `enqueue`.
+
+# Example
+
+## Enqueue
+
+```python
+
+from redis import Redis
+from lacuscore import LacusCore
+
+redis = Redis()
+lacus = LacusCore(self.redis)
+uuid = lacus.enqueue('google.fr')
+```
+
+## Capture
+
+* Option 1: Trigger a specific capture via the UUID returned by the `enqueue` call
+
+```python
+await lacus.capture(uuid)
+```
+
+* Option 2: Trigger the capture with the highest priority from the queue
+
+```python
+uuid = await lacus.consume_queue()
+```
+
+## Status of a capture
+
+```python
+status = lacus.get_capture_status(uuid)
+```
+
+## Capture result
+
+```python
+result = lacus.get_capture(uuid)
+```
+
