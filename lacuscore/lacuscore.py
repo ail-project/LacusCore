@@ -323,31 +323,36 @@ class LacusCore():
             result: PlaywrightCaptureResponse = {}
             to_capture: CaptureSettings = {}
             document_as_bytes = b''
-            for k, v in zip(setting_keys, self.redis.hmget(f'lacus:capture_settings:{uuid}', setting_keys)):
-                if v is None:
-                    continue
-                if k in ['url', 'document_name', 'browser', 'device_name', 'user_agent', 'referer']:
-                    # string
-                    to_capture[k] = v.decode()  # type: ignore
-                elif k in ['cookies', 'http_credentials', 'viewport']:
-                    # dicts or list
-                    to_capture[k] = json.loads(v)  # type: ignore
-                elif k in ['proxy', 'headers']:
-                    # can be dict or str
-                    if v[0] == b'{':
-                        to_capture[k] = json.loads(v)  # type: ignore
-                    else:
+            try:
+                for k, v in zip(setting_keys, self.redis.hmget(f'lacus:capture_settings:{uuid}', setting_keys)):
+                    if v is None:
+                        continue
+                    if k in ['url', 'document_name', 'browser', 'device_name', 'user_agent', 'referer']:
+                        # string
                         to_capture[k] = v.decode()  # type: ignore
-                elif k in ['general_timeout_in_sec', 'depth']:
-                    # int
-                    to_capture[k] = int(v)  # type: ignore
-                elif k in ['rendered_hostname_only']:
-                    # bool
-                    to_capture[k] = bool(int(v))  # type: ignore
-                elif k == 'document':
-                    document_as_bytes = b64decode(v)
-                else:
-                    raise LacusCoreException(f'Unexpected setting: {k}: {v}')
+                    elif k in ['cookies', 'http_credentials', 'viewport']:
+                        # dicts or list
+                        to_capture[k] = json.loads(v)  # type: ignore
+                    elif k in ['proxy', 'headers']:
+                        # can be dict or str
+                        if v[0] == b'{':
+                            to_capture[k] = json.loads(v)  # type: ignore
+                        else:
+                            to_capture[k] = v.decode()  # type: ignore
+                    elif k in ['general_timeout_in_sec', 'depth']:
+                        # int
+                        to_capture[k] = int(v)  # type: ignore
+                    elif k in ['rendered_hostname_only']:
+                        # bool
+                        to_capture[k] = bool(int(v))  # type: ignore
+                    elif k == 'document':
+                        document_as_bytes = b64decode(v)
+                    else:
+                        raise LacusCoreException(f'Unexpected setting: {k}: {v}')
+            except LacusCoreException as e:
+                raise e
+            except Exception as e:
+                raise LacusCoreException(f'Error while preparing settings: {e}')
 
             if not to_capture:
                 result = {'error': f'No capture settings for {uuid}.'}
