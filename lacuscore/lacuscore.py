@@ -9,6 +9,7 @@ import os
 import pickle
 import re
 import socket
+import time
 import unicodedata
 
 from base64 import b64decode, b64encode
@@ -139,8 +140,8 @@ class LacusCore():
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
 
-    def check_redis_up(self):
-        return self.redis.ping()
+    def check_redis_up(self) -> bool:
+        return bool(self.redis.ping())
 
     @overload
     def enqueue(self, *, settings: Optional[CaptureSettings]=None) -> str:
@@ -271,7 +272,7 @@ class LacusCore():
         to_return: CaptureResponseJson = {'status': CaptureStatus.UNKNOWN}
         if self.redis.zscore('lacus:to_capture', uuid):
             to_return['status'] = CaptureStatus.QUEUED
-        elif self.redis.sismember('lacus:ongoing', uuid):
+        elif self.redis.zscore('lacus:ongoing', uuid) is not None:
             to_return['status'] = CaptureStatus.ONGOING
         elif response := self.redis.get(f'lacus:capture_results:{uuid}'):
             to_return['status'] = CaptureStatus.DONE
@@ -283,7 +284,7 @@ class LacusCore():
     def get_capture_status(self, uuid: str) -> CaptureStatus:
         if self.redis.zscore('lacus:to_capture', uuid):
             return CaptureStatus.QUEUED
-        elif self.redis.sismember('lacus:ongoing', uuid):
+        elif self.redis.zscore('lacus:ongoing', uuid) is not None:
             return CaptureStatus.ONGOING
         elif self.redis.exists(f'lacus:capture_results:{uuid}'):
             return CaptureStatus.DONE
@@ -298,7 +299,7 @@ class LacusCore():
         return uuid
 
     async def capture(self, uuid: str, score: Optional[Union[float, int]]=None):
-        if self.redis.sismember('lacus:ongoing', uuid):
+        if self.redis.zscore('lacus:ongoing', uuid) is not None:
             # the capture is ongoing
             return
 
@@ -314,7 +315,7 @@ class LacusCore():
             self.redis.zrem('lacus:to_capture', uuid)
             current_score = s
 
-        self.redis.sadd('lacus:ongoing', uuid)
+        self.redis.zadd('lacus:ongoing', {uuid: time.time()})
         try:
             setting_keys = ['depth', 'rendered_hostname_only', 'url', 'document_name',
                             'document', 'browser', 'device_name', 'user_agent', 'proxy',
@@ -481,5 +482,5 @@ class LacusCore():
             else:
                 p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
                 p.delete(f'lacus:capture_settings:{uuid}')
-            p.srem('lacus:ongoing', uuid)
+            p.zrem('lacus:ongoing', uuid)
             p.execute()
