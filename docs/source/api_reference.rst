@@ -7,8 +7,20 @@ API reference
 .. automodule:: lacuscore
    :members:
 
-PyProject
+LacusCore
 ---------
 
 .. autoclass:: LacusCore
    :members:
+
+.. autoclass:: CaptureStatus
+  :members:
+
+.. autoclass:: CaptureResponse
+  :members:
+
+.. autoclass:: CaptureResponseJson
+  :members:
+
+.. autoclass:: CaptureSettings
+  :members:
