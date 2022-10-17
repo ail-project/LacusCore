@@ -151,10 +151,6 @@ class LacusCore():
 
     @overload
     def enqueue(self, *, settings: Optional[CaptureSettings]=None) -> str:
-        """Enqueue settings.
-
-        :param settings: Settings as a dictionary.
-        """
         ...
 
     @overload
@@ -176,27 +172,6 @@ class LacusCore():
                 recapture_interval: int=300,
                 priority: int=0
                 ) -> str:
-        """Enqueue settings.
-
-        :param url: URL to capture (incompatible with document and document_name)
-        :param document_name: Filename of the document to capture (required if document is used)
-        :param document: Document to capture itself (requires a document_name)
-        :param depth: [Dangerous] Depth of the capture. If > 0, the URLs of the rendered document will be extracted and captured. It can take a very long time.
-        :param browser: The prowser to use for the capture
-        :param device_name: The name of the device, must be something Playwright knows
-        :param user_agent: The user agent the browser will use for the capture
-        :param proxy: SOCKS5 proxy to use for capturing
-        :param general_timeout_in_sec: The capture will raise a timeout it it takes more than that time
-        :param cookies: A list of cookies
-        :param headers: The headers to pass to the capture
-        :param http_credentials: HTTP Credentials to pass to the capture
-        :param viewport: The viewport of the browser used for capturing
-        :param referer: The referer URL for the capture
-        :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
-        :param force: Force recapture, even if the same one was already done within the recapture_interval
-        :param recapture_interval: The time the enqueued settings are kept in memory to avoid duplicates
-        :param priority: The priority of the capture
-        """
         ...
 
     def enqueue(self, *,
@@ -218,6 +193,31 @@ class LacusCore():
                 recapture_interval: int=300,
                 priority: int=0
                 ) -> str:
+        """Enqueue settings.
+
+        :param settings: Settings as a dictionary
+
+        :param url: URL to capture (incompatible with document and document_name)
+        :param document_name: Filename of the document to capture (required if document is used)
+        :param document: Document to capture itself (requires a document_name)
+        :param depth: [Dangerous] Depth of the capture. If > 0, the URLs of the rendered document will be extracted and captured. It can take a very long time.
+        :param browser: The prowser to use for the capture
+        :param device_name: The name of the device, must be something Playwright knows
+        :param user_agent: The user agent the browser will use for the capture
+        :param proxy: SOCKS5 proxy to use for capturing
+        :param general_timeout_in_sec: The capture will raise a timeout it it takes more than that time
+        :param cookies: A list of cookies
+        :param headers: The headers to pass to the capture
+        :param http_credentials: HTTP Credentials to pass to the capture
+        :param viewport: The viewport of the browser used for capturing
+        :param referer: The referer URL for the capture
+        :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
+        :param force: Force recapture, even if the same one was already done within the recapture_interval
+        :param recapture_interval: The time the enqueued settings are kept in memory to avoid duplicates
+        :param priority: The priority of the capture
+
+        :return: UUID, reference to the capture for later use
+        """
         to_enqueue: CaptureSettings
         if settings:
             if settings.get('force') is not None:
@@ -293,16 +293,20 @@ class LacusCore():
 
     @overload
     def get_capture(self, uuid: str, *, decode: Literal[True]=True) -> CaptureResponse:
-        """Get the results of a capture.
-        """
         ...
 
     @overload
     def get_capture(self, uuid: str, *, decode: Literal[False]) -> CaptureResponseJson:
-        """Get the results of a capture, in a json compatible format"""
         ...
 
     def get_capture(self, uuid: str, *, decode: bool=False) -> Union[CaptureResponse, CaptureResponseJson]:
+        """Get the results of a capture, in a json compatible format or not
+
+        :param uuid: The UUID if the capture (given by enqueue)
+        :param decode: Decode the capture result or not.
+
+        :return: The capture, decoded or not.
+        """
         to_return: CaptureResponseJson = {'status': CaptureStatus.UNKNOWN}
         if self.redis.zscore('lacus:to_capture', uuid):
             to_return['status'] = CaptureStatus.QUEUED
@@ -316,7 +320,12 @@ class LacusCore():
         return to_return
 
     def get_capture_status(self, uuid: str) -> CaptureStatus:
-        """Get the status of a capture"""
+        """Get the status of a capture
+
+        :param uuid: The UUID if the capture (given by enqueue)
+
+        :return: The status
+        """
         if self.redis.zscore('lacus:to_capture', uuid):
             return CaptureStatus.QUEUED
         elif self.redis.zscore('lacus:ongoing', uuid) is not None:
@@ -326,7 +335,10 @@ class LacusCore():
         return CaptureStatus.UNKNOWN
 
     async def consume_queue(self) -> Optional[str]:
-        """Trigger the capture with the highest priority"""
+        """Trigger the capture with the highest priority
+
+        :return: The UUID of the capture.
+        """
         value: List[Tuple[bytes, float]] = self.redis.zpopmax('lacus:to_capture')
         if not value or not value[0]:
             return None
@@ -335,7 +347,11 @@ class LacusCore():
         return uuid
 
     async def capture(self, uuid: str, score: Optional[Union[float, int]]=None):
-        """Trigger a specific capture"""
+        """Trigger a specific capture
+
+        :param uuid: The UUID if the capture (given by enqueue)
+        :param score: Only for internal use, will decide ont he priority of the capture if the try now fails.
+        """
         if self.redis.zscore('lacus:ongoing', uuid) is not None:
             # the capture is ongoing
             return
@@ -513,11 +529,21 @@ class LacusCore():
             if to_capture.get('document'):
                 os.unlink(tmp_f.name)
 
-            p = self.redis.pipeline()
-            if retry:
-                p.zadd('lacus:to_capture', {uuid: current_score - 1})
+            retry_redis_error = 3
+            while retry_redis_error > 0:
+                try:
+                    p = self.redis.pipeline()
+                    if retry:
+                        p.zadd('lacus:to_capture', {uuid: current_score - 1})
+                    else:
+                        p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
+                        p.delete(f'lacus:capture_settings:{uuid}')
+                    p.zrem('lacus:ongoing', uuid)
+                    p.execute()
+                    break
+                except RedisConnectionError as e:
+                    self.logger.warning(f'Redis Connection Error: {e}')
+                    retry_redis_error -= 1
+                    await asyncio.sleep(5)
             else:
-                p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
-                p.delete(f'lacus:capture_settings:{uuid}')
-            p.zrem('lacus:ongoing', uuid)
-            p.execute()
+                self.logger.critical(f'Unable to connect to redis and to push the result of the capture {uuid}.')
