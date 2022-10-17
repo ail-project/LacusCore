@@ -45,29 +45,33 @@ The example below is the minimum viable code to use in order to capture a URL.
     from lacuscore import LacusCore
 
     redis = Redis()
-    lacus = LacusCore(self.redis)
+    lacus = LacusCore(redis)
     uuid = lacus.enqueue('google.fr')
 
 * Capture
 
   * Option 1: Trigger a specific capture via the UUID returned by the `enqueue` call
 
-.. code:: python
-    await lacus.capture(uuid)
+    .. code:: python
+
+      await lacus.capture(uuid)
 
   * Option 2: Trigger the capture with the highest priority from the queue
 
-.. code:: python
-    uuid = await lacus.consume_queue()
+    .. code:: python
+
+      uuid = await lacus.consume_queue()
 
 * Capture Status
 
 .. code:: python
+
     status = lacus.get_capture_status(uuid)
 
 * Capture result
 
 .. code:: python
+
     result = lacus.get_capture(uuid)
 
 Library
