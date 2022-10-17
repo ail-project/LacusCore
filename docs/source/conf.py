@@ -17,12 +17,12 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'PyProject'
-copyright = '2021, Lookyloo team'
-author = 'Lookyloo team'
+project = 'LacusCore'
+copyright = '2022, AIL Framework Team'
+author = 'AIL Framework team'
 
 # The full version, including alpha/beta/rc tags
-release = 'v0.0.1'
+release = 'v0.5.1'
 
 
 # -- General configuration ---------------------------------------------------

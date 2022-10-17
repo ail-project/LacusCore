@@ -4,11 +4,11 @@ API reference
 .. toctree::
    :maxdepth: 2
 
-.. automodule:: pyproject
+.. automodule:: lacuscore
    :members:
 
 PyProject
 ---------
 
-.. autoclass:: PyProject
+.. autoclass:: LacusCore
    :members:
