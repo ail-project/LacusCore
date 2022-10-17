@@ -24,6 +24,7 @@ from defang import refang  # type: ignore
 from playwrightcapture import Capture, PlaywrightCaptureException
 from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
 from redis import Redis
+from redis.exception import ConnectionError as RedisConnectionError
 from ua_parser import user_agent_parser  # type: ignore
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
