@@ -496,6 +496,10 @@ class LacusCore():
                 self.logger.exception(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': 'Invalid parameters for the capture of {url} - {e}'}
                 raise CaptureError
+            except asyncio.CancelledError:
+                self.logger.warning(f'The capture of {url} has been cancelled.')
+                result = {'error': f'The capture of {url} has been cancelled.'}
+                raise CaptureError
             except Exception as e:
                 self.logger.exception(f'Something went poorly {url} - {e}')
                 result = {'error': f'Something went poorly {url} - {e}'}
