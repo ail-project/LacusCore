@@ -514,6 +514,10 @@ class LacusCore():
                 # Just wait a little bit before retrying, expecially if it is the only capture in the queue
                 await asyncio.sleep(5)
                 retry = True
+            else:
+                error_msg = result['error'] if result.get('error') else 'Unknown error'
+                self.logger.warning(f'Retried too many times {url} - {uuid}: {error_msg}')
+
         except CaptureError:
             if not result:
                 result = {'error': "No result key, shouldn't happen"}
