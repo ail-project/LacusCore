@@ -69,19 +69,11 @@ class CaptureStatus(IntEnum):
     ONGOING = 2
 
 
-class CaptureResponse(TypedDict, total=False):
+class CaptureResponse(PlaywrightCaptureResponse, TypedDict, total=False):
     '''A capture made by Lacus. With the base64 encoded image and downloaded file decoded to bytes.'''
 
     status: int
-    last_redirected_url: str
-    har: Optional[Dict[str, Any]]
-    cookies: Optional[List[Dict[str, str]]]
-    error: Optional[str]
-    html: Optional[str]
-    png: Optional[bytes]
-    downloaded_filename: Optional[str]
-    downloaded_file: Optional[bytes]
-    children: Optional[List[Any]]
+    runtime: Optional[float]
 
 
 class CaptureResponseJson(TypedDict, total=False):
@@ -97,6 +89,7 @@ class CaptureResponseJson(TypedDict, total=False):
     downloaded_filename: Optional[str]
     downloaded_file: Optional[str]
     children: Optional[List[Any]]
+    runtime: Optional[float]
 
 
 class CaptureSettings(TypedDict, total=False):
@@ -375,7 +368,7 @@ class LacusCore():
                             'document', 'browser', 'device_name', 'user_agent', 'proxy',
                             'general_timeout_in_sec', 'cookies', 'headers', 'http_credentials',
                             'viewport', 'referer']
-            result: PlaywrightCaptureResponse = {}
+            result: CaptureResponse = {}
             to_capture: CaptureSettings = {}
             document_as_bytes = b''
             try:
@@ -451,7 +444,7 @@ class LacusCore():
                         try:
                             ips_info = socket.getaddrinfo(splitted_url.hostname, None, proto=socket.IPPROTO_TCP)
                         except socket.gaierror:
-                            self.logger.info(f'Unable to resolve {splitted_url.hostname}.')
+                            self.logger.debug(f'Unable to resolve {splitted_url.hostname}.')
                             result = {'error': f'Unable to resolve {splitted_url.hostname}.'}
                             raise RetryCapture
                         except Exception as e:
@@ -477,7 +470,7 @@ class LacusCore():
                     browser_engine = 'webkit'
 
             try:
-                self.logger.info(f'Capturing {url}')
+                self.logger.debug(f'Capturing {url}')
                 async with Capture(browser=browser_engine,
                                    device_name=to_capture.get('device_name'),
                                    proxy=proxy,
@@ -488,10 +481,11 @@ class LacusCore():
                     capture.viewport = to_capture.get('viewport')  # type: ignore
                     capture.user_agent = to_capture.get('user_agent')  # type: ignore
                     await capture.initialize_context()
-                    result = await capture.capture_page(
+                    playwright_result = await capture.capture_page(
                         url, referer=to_capture.get('referer'),
                         depth=to_capture.get('depth', 0),
                         rendered_hostname_only=to_capture.get('rendered_hostname_only', True))
+                    result = cast(CaptureResponse, playwright_result)
             except PlaywrightCaptureException as e:
                 self.logger.exception(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': 'Invalid parameters for the capture of {url} - {e}'}
@@ -516,6 +510,7 @@ class LacusCore():
             else:
                 self.redis.decr(f'lacus:capture_retry:{uuid}')
             if current_retry is None or int(current_retry.decode()) > 0:
+                self.logger.info(f'Retrying {url} - {uuid}')
                 # Just wait a little bit before retrying, expecially if it is the only capture in the queue
                 await asyncio.sleep(5)
                 retry = True
@@ -528,7 +523,12 @@ class LacusCore():
             else:
                 self.logger.warning(f'Unable to capture {uuid}: {result["error"]}')
         else:
-            self.logger.info(f'Successfully captured {url} - {uuid}')
+            if (start_time := self.redis.zscore('lacus:ongoing', uuid)) is not None:
+                runtime = time.time() - start_time
+                self.logger.info(f'Successfully captured {url} - {uuid} - Runtime: {runtime}s')
+                result['runtime'] = runtime
+            else:
+                self.logger.info(f'Successfully captured {url} - {uuid}')
         finally:
 
             if to_capture.get('document'):
