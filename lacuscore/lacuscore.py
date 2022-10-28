@@ -139,6 +139,10 @@ class LacusCore():
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
 
+        # NOTE: clear old ongoing captures queue in case of need
+        if self.redis.type('lacus:ongoing') in ['set', b'set']:
+            self.redis.delete('lacus:ongoing')
+
     def check_redis_up(self) -> bool:
         """Check if redis is reachable"""
         return bool(self.redis.ping())
