@@ -111,6 +111,7 @@ class CaptureSettings(TypedDict, total=False):
     force: Optional[bool]
     recapture_interval: Optional[int]
     priority: Optional[int]
+    uuid: Optional[str]
 
     depth: int
     rendered_hostname_only: bool  # Note: only used if depth is > 0
@@ -168,7 +169,8 @@ class LacusCore():
                 rendered_hostname_only: bool=True,
                 force: bool=False,
                 recapture_interval: int=300,
-                priority: int=0
+                priority: int=0,
+                uuid: Optional[str]=None
                 ) -> str:
         ...
 
@@ -189,7 +191,8 @@ class LacusCore():
                 rendered_hostname_only: bool=True,
                 force: bool=False,
                 recapture_interval: int=300,
-                priority: int=0
+                priority: int=0,
+                uuid: Optional[str]=None
                 ) -> str:
         """Enqueue settings.
 
@@ -213,6 +216,7 @@ class LacusCore():
         :param force: Force recapture, even if the same one was already done within the recapture_interval
         :param recapture_interval: The time the enqueued settings are kept in memory to avoid duplicates
         :param priority: The priority of the capture
+        :param uuid: The preset priority of the capture, auto-generated if not present. Should only be used if the initiator couldn't enqueue immediately.
 
         :return: UUID, reference to the capture for later use
         """
@@ -259,7 +263,11 @@ class LacusCore():
                 if isinstance(existing_uuid, bytes):
                     return existing_uuid.decode()
                 return existing_uuid
-        perma_uuid = str(uuid4())
+
+        if uuid:
+            perma_uuid = uuid
+        else:
+            perma_uuid = str(uuid4())
 
         mapping_capture: Dict[str, Union[bytes, float, int, str]] = {}
         for key, value in to_enqueue.items():
