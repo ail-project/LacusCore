@@ -432,7 +432,7 @@ class LacusCore():
             elif to_capture.get('url'):
                 url = to_capture['url'].strip()  # type: ignore
                 url = refang(url)  # In case we get a defanged url at this stage.
-                if url.startswith('file') and not self.only_global_lookups:
+                if url.startswith('file') and self.only_global_lookups:
                     result = {'error': f'Not allowed to capture a file on disk: {url}'}
                     raise CaptureError
                 if not url.startswith('data') and not url.startswith('http') and not url.startswith('file'):
