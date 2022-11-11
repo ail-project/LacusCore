@@ -383,6 +383,7 @@ class LacusCore():
             result: CaptureResponse = {}
             to_capture: CaptureSettings = {}
             document_as_bytes = b''
+            url: str = ''
             try:
                 for k, v in zip(setting_keys, self.redis.hmget(f'lacus:capture_settings:{uuid}', setting_keys)):
                     if v is None:
@@ -418,7 +419,6 @@ class LacusCore():
                 result = {'error': f'No capture settings for {uuid}.'}
                 raise CaptureError
 
-            url: str = ''
             if document_as_bytes:
                 # we do not have a URL yet.
                 name = to_capture.pop('document_name', None)
@@ -541,12 +541,17 @@ class LacusCore():
                 self.logger.warning(f'Unable to capture {url} - {uuid}: {result["error"]}')
             else:
                 self.logger.warning(f'Unable to capture {uuid}: {result["error"]}')
+        except Exception as e:
+            msg = f'Something unexpected happened with {url} ({uuid}): {e}'
+            result = {'error': msg}
+            self.logger.exception(msg)
         else:
             if (start_time := self.redis.zscore('lacus:ongoing', uuid)) is not None:
                 runtime = time.time() - start_time
                 self.logger.info(f'Successfully captured {url} - {uuid} - Runtime: {runtime}s')
                 result['runtime'] = runtime
             else:
+                # NOTE: old format, remove in 2023
                 self.logger.info(f'Successfully captured {url} - {uuid}')
         finally:
 
