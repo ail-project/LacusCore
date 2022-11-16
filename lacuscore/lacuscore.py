@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import pickle
+import random
 import re
 import socket
 import time
@@ -525,13 +526,13 @@ class LacusCore():
             else:
                 self.redis.decr(f'lacus:capture_retry:{uuid}')
             if current_retry is None or int(current_retry.decode()) > 0:
-                self.logger.info(f'Retrying {url} - {uuid}')
+                self.logger.debug(f'Retrying {url} - {uuid}')
                 # Just wait a little bit before retrying, expecially if it is the only capture in the queue
-                await asyncio.sleep(5)
+                await asyncio.sleep(random.randint(5, 10))
                 retry = True
             else:
                 error_msg = result['error'] if result.get('error') else 'Unknown error'
-                self.logger.warning(f'Retried too many times {url} - {uuid}: {error_msg}')
+                self.logger.info(f'Retried too many times {url} - {uuid}: {error_msg}')
 
         except CaptureError:
             if not result:
@@ -573,6 +574,6 @@ class LacusCore():
                 except RedisConnectionError as e:
                     self.logger.warning(f'Redis Connection Error: {e}')
                     retry_redis_error -= 1
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(random.randint(5, 10))
             else:
                 self.logger.critical(f'Unable to connect to redis and to push the result of the capture {uuid}.')
