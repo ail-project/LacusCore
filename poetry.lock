@@ -573,16 +573,15 @@ tzdata = {version = "*", markers = "python_version >= \"3.6\""}
 
 [[package]]
 name = "redis"
-version = "4.3.5"
+version = "4.4.0"
 description = "Python client for Redis database and key-value store"
 category = "main"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.7"
 
 [package.dependencies]
 async-timeout = ">=4.0.2"
 hiredis = {version = ">=1.0.0", optional = true, markers = "extra == \"hiredis\""}
-packaging = ">=20.4"
 
 [package.extras]
 hiredis = ["hiredis (>=1.0.0)"]
@@ -1341,8 +1340,8 @@ pytz-deprecation-shim = [
     {file = "pytz_deprecation_shim-0.1.0.post0.tar.gz", hash = "sha256:af097bae1b616dde5c5744441e2ddc69e74dfdcb0c263129610d85b87445a59d"},
 ]
 redis = [
-    {file = "redis-4.3.5-py3-none-any.whl", hash = "sha256:46652271dc7525cd5a9667e5b0ca983c848c75b2b8f7425403395bb8379dcf25"},
-    {file = "redis-4.3.5.tar.gz", hash = "sha256:30c07511627a4c5c4d970e060000772f323174f75e745a26938319817ead7a12"},
+    {file = "redis-4.4.0-py3-none-any.whl", hash = "sha256:cae3ee5d1f57d8caf534cd8764edf3163c77e073bdd74b6f54a87ffafdc5e7d9"},
+    {file = "redis-4.4.0.tar.gz", hash = "sha256:7b8c87d19c45d3f1271b124858d2a5c13160c4e74d4835e28273400fa34d5228"},
 ]
 regex = [
     {file = "regex-2022.10.31-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:a8ff454ef0bb061e37df03557afda9d785c905dab15584860f982e88be73015f"},
