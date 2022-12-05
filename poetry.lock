@@ -16,7 +16,7 @@ python-versions = "*"
 
 [[package]]
 name = "asttokens"
-version = "2.2.0"
+version = "2.2.1"
 description = "Annotate AST trees with source code positions"
 category = "dev"
 optional = false
@@ -429,7 +429,7 @@ typing-extensions = {version = "*", markers = "python_version <= \"3.8\""}
 
 [[package]]
 name = "playwrightcapture"
-version = "1.16.4"
+version = "1.16.6"
 description = "A simple library to capture websites using playwright"
 category = "main"
 optional = false
@@ -440,10 +440,13 @@ beautifulsoup4 = ">=4.11.1,<5.0.0"
 dateparser = ">=1.1.4,<2.0.0"
 lxml = ">=4.9.1,<5.0.0"
 playwright = ">=1.28.0,<2.0.0"
+pydub = {version = ">=0.25.1,<0.26.0", optional = true, markers = "extra == \"recaptcha\""}
+requests = {version = ">=2.28.1,<3.0.0", optional = true, markers = "extra == \"recaptcha\""}
+SpeechRecognition = {version = ">=3.9.0,<4.0.0", optional = true, markers = "extra == \"recaptcha\""}
 w3lib = ">=2.1.0,<3.0.0"
 
 [package.extras]
-recaptcha = ["SpeechRecognition (>=3.8.1,<4.0.0)", "pydub (>=0.25.1,<0.26.0)", "requests (>=2.28.1,<3.0.0)"]
+recaptcha = ["SpeechRecognition (>=3.9.0,<4.0.0)", "pydub (>=0.25.1,<0.26.0)", "requests (>=2.28.1,<3.0.0)"]
 
 [[package]]
 name = "pluggy"
@@ -486,6 +489,14 @@ python-versions = "*"
 
 [package.extras]
 tests = ["pytest"]
+
+[[package]]
+name = "pydub"
+version = "0.25.1"
+description = "Manipulate audio with an simple and easy high level interface"
+category = "main"
+optional = false
+python-versions = "*"
 
 [[package]]
 name = "pyee"
@@ -573,16 +584,15 @@ tzdata = {version = "*", markers = "python_version >= \"3.6\""}
 
 [[package]]
 name = "redis"
-version = "4.3.5"
+version = "4.4.0"
 description = "Python client for Redis database and key-value store"
 category = "main"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.7"
 
 [package.dependencies]
 async-timeout = ">=4.0.2"
 hiredis = {version = ">=1.0.0", optional = true, markers = "extra == \"hiredis\""}
-packaging = ">=20.4"
 
 [package.extras]
 hiredis = ["hiredis (>=1.0.0)"]
@@ -637,6 +647,17 @@ description = "A modern CSS selector implementation for Beautiful Soup."
 category = "main"
 optional = false
 python-versions = ">=3.6"
+
+[[package]]
+name = "speechrecognition"
+version = "3.9.0"
+description = "Library for performing speech recognition, with support for several engines and APIs, online and offline."
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+requests = ">=2.26.0"
 
 [[package]]
 name = "sphinx"
@@ -892,7 +913,7 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "a3c7998401154809380828693b6c5a21cb61f93a273faa64bb1c7e290a2b6cda"
+content-hash = "1c4060c3de79bbc0e1fcd9fd94a8d37e0ed9c4001309639e8dab7b386f1b5b8c"
 
 [metadata.files]
 alabaster = [
@@ -904,8 +925,8 @@ appnope = [
     {file = "appnope-0.1.3.tar.gz", hash = "sha256:02bd91c4de869fbb1e1c50aafc4098827a7a54ab2f39d9dcba6c9547ed920e24"},
 ]
 asttokens = [
-    {file = "asttokens-2.2.0-py2.py3-none-any.whl", hash = "sha256:c56caef774a929923696f09ceea0eadcb95c94b30e8ee4f9fc4f5867096caaeb"},
-    {file = "asttokens-2.2.0.tar.gz", hash = "sha256:e27b1f115daebfafd4d1826fc75f9a72f0b74bd3ae4ee4d9380406d74d35e52c"},
+    {file = "asttokens-2.2.1-py2.py3-none-any.whl", hash = "sha256:6b0ac9e93fb0335014d382b8fa9b3afa7df546984258005da0b9e7095b3deb1c"},
+    {file = "asttokens-2.2.1.tar.gz", hash = "sha256:4622110b2a6f30b77e1473affaa97e711bc2f07d3f10848420ff1898edbe94f3"},
 ]
 async-timeout = [
     {file = "async-timeout-4.0.2.tar.gz", hash = "sha256:2163e1640ddb52b7a8c80d0a67a08587e5d245cc9c553a74a847056bc2976b15"},
@@ -1293,8 +1314,8 @@ playwright = [
     {file = "playwright-1.28.0-py3-none-win_amd64.whl", hash = "sha256:794b9da616c03354a12e48ddf060a9e776ab59b90662b0131ff74ec1b25739f4"},
 ]
 playwrightcapture = [
-    {file = "playwrightcapture-1.16.4-py3-none-any.whl", hash = "sha256:ca5b1f41f943f506fc262cfaceb64e5dcd0351ade9f9d14edc91f750ef117e6e"},
-    {file = "playwrightcapture-1.16.4.tar.gz", hash = "sha256:9c6abf2df7609edfa29d815cacf55d9a541a2712f576bbfdb60796bc7fbd6d4f"},
+    {file = "playwrightcapture-1.16.6-py3-none-any.whl", hash = "sha256:8412f3ec3cb96c33bc9cac7013cfa90278d99c9f1da61a82d1e3744ecbd12569"},
+    {file = "playwrightcapture-1.16.6.tar.gz", hash = "sha256:2b64a0b39aa4000b8e9ceb6fe61e485a426bd79b6d7e7e55005677b315c901b1"},
 ]
 pluggy = [
     {file = "pluggy-1.0.0-py2.py3-none-any.whl", hash = "sha256:74134bbf457f031a36d68416e1509f34bd5ccc019f0bcc952c7b909d06b37bd3"},
@@ -1311,6 +1332,10 @@ ptyprocess = [
 pure-eval = [
     {file = "pure_eval-0.2.2-py3-none-any.whl", hash = "sha256:01eaab343580944bc56080ebe0a674b39ec44a945e6d09ba7db3cb8cec289350"},
     {file = "pure_eval-0.2.2.tar.gz", hash = "sha256:2b45320af6dfaa1750f543d714b6d1c520a1688dec6fd24d339063ce0aaa9ac3"},
+]
+pydub = [
+    {file = "pydub-0.25.1-py2.py3-none-any.whl", hash = "sha256:65617e33033874b59d87db603aa1ed450633288aefead953b30bded59cb599a6"},
+    {file = "pydub-0.25.1.tar.gz", hash = "sha256:980a33ce9949cab2a569606b65674d748ecbca4f0796887fd6f46173a7b0d30f"},
 ]
 pyee = [
     {file = "pyee-9.0.4-py2.py3-none-any.whl", hash = "sha256:9f066570130c554e9cc12de5a9d86f57c7ee47fece163bbdaa3e9c933cfbdfa5"},
@@ -1341,8 +1366,8 @@ pytz-deprecation-shim = [
     {file = "pytz_deprecation_shim-0.1.0.post0.tar.gz", hash = "sha256:af097bae1b616dde5c5744441e2ddc69e74dfdcb0c263129610d85b87445a59d"},
 ]
 redis = [
-    {file = "redis-4.3.5-py3-none-any.whl", hash = "sha256:46652271dc7525cd5a9667e5b0ca983c848c75b2b8f7425403395bb8379dcf25"},
-    {file = "redis-4.3.5.tar.gz", hash = "sha256:30c07511627a4c5c4d970e060000772f323174f75e745a26938319817ead7a12"},
+    {file = "redis-4.4.0-py3-none-any.whl", hash = "sha256:cae3ee5d1f57d8caf534cd8764edf3163c77e073bdd74b6f54a87ffafdc5e7d9"},
+    {file = "redis-4.4.0.tar.gz", hash = "sha256:7b8c87d19c45d3f1271b124858d2a5c13160c4e74d4835e28273400fa34d5228"},
 ]
 regex = [
     {file = "regex-2022.10.31-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:a8ff454ef0bb061e37df03557afda9d785c905dab15584860f982e88be73015f"},
@@ -1449,6 +1474,10 @@ snowballstemmer = [
 soupsieve = [
     {file = "soupsieve-2.3.2.post1-py3-none-any.whl", hash = "sha256:3b2503d3c7084a42b1ebd08116e5f81aadfaea95863628c80a3b774a11b7c759"},
     {file = "soupsieve-2.3.2.post1.tar.gz", hash = "sha256:fc53893b3da2c33de295667a0e19f078c14bf86544af307354de5fcf12a3f30d"},
+]
+speechrecognition = [
+    {file = "SpeechRecognition-3.9.0-py2.py3-none-any.whl", hash = "sha256:6da44facb564b3f2bcee96a2bf876b89a14f61afdee1e7fb12815e58211fd329"},
+    {file = "SpeechRecognition-3.9.0.tar.gz", hash = "sha256:a2f992acda6314a3fa574bf84c2e075ce75f2b4c143b4435d7cbc98f66565ee7"},
 ]
 sphinx = [
     {file = "Sphinx-5.3.0.tar.gz", hash = "sha256:51026de0a9ff9fc13c05d74913ad66047e104f56a129ff73e174eb5c3ee794b5"},
