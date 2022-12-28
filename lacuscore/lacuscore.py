@@ -217,7 +217,7 @@ class LacusCore():
         :param force: Force recapture, even if the same one was already done within the recapture_interval
         :param recapture_interval: The time the enqueued settings are kept in memory to avoid duplicates
         :param priority: The priority of the capture
-        :param uuid: The preset priority of the capture, auto-generated if not present. Should only be used if the initiator couldn't enqueue immediately.
+        :param uuid: The preset priority of the capture, auto-generated if not present. Should only be used if the initiator couldn't enqueue immediately. NOTE: it will be overwritten if the UUID already exists.
 
         :return: UUID, reference to the capture for later use
         """
@@ -266,7 +266,12 @@ class LacusCore():
                 return existing_uuid
 
         if uuid:
-            perma_uuid = uuid
+            # Make sure we do not already have a capture with that UUID
+            if self.get_capture_status(uuid) == CaptureStatus.UNKNOWN:
+                perma_uuid = uuid
+            else:
+                self.logger.warning(f'UUID {uuid} already exists, forcing a new one.')
+                perma_uuid = str(uuid4())
         else:
             perma_uuid = str(uuid4())
 
