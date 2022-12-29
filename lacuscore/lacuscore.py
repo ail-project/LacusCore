@@ -15,9 +15,10 @@ import unicodedata
 
 from base64 import b64decode, b64encode
 from enum import IntEnum, unique
+from logging import LoggerAdapter
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Literal, Optional, Union, Dict, List, Any, TypedDict, overload, Tuple, cast
+from typing import Literal, Optional, Union, Dict, List, Any, TypedDict, overload, Tuple, cast, MutableMapping
 from uuid import uuid4
 from urllib.parse import urlsplit
 
@@ -118,6 +119,16 @@ class CaptureSettings(TypedDict, total=False):
     rendered_hostname_only: bool  # Note: only used if depth is > 0
 
 
+class LacusCoreLogAdapter(LoggerAdapter):
+    """
+    Prepend log entry with the UUID of the capture
+    """
+    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> Tuple[str, MutableMapping[str, Any]]:
+        if self.extra:
+            return '[%s] %s' % (self.extra['uuid'], msg), kwargs
+        return msg, kwargs
+
+
 def _json_encode(obj: Union[bytes]) -> str:
     if isinstance(obj, bytes):
         return b64encode(obj).decode()
@@ -132,10 +143,11 @@ class LacusCore():
     :param max_retries: How many times should we re-try a capture if it failed.
     """
 
-    def __init__(self, redis_connector: Redis, tor_proxy: Optional[str]=None, only_global_lookups: bool=True, max_retries: int=3) -> None:
-        self.logger = logging.getLogger(f'{self.__class__.__name__}')
-        self.logger.setLevel('INFO')
-
+    def __init__(self, redis_connector: Redis, tor_proxy: Optional[str]=None,
+                 only_global_lookups: bool=True, max_retries: int=3,
+                 loglevel: str='INFO') -> None:
+        self.master_logger = logging.getLogger(f'{self.__class__.__name__}')
+        self.master_logger.setLevel(loglevel)
         self.redis = redis_connector
         self.tor_proxy = tor_proxy
         self.only_global_lookups = only_global_lookups
@@ -270,8 +282,8 @@ class LacusCore():
             if self.get_capture_status(uuid) == CaptureStatus.UNKNOWN:
                 perma_uuid = uuid
             else:
-                self.logger.warning(f'UUID {uuid} already exists, forcing a new one.')
                 perma_uuid = str(uuid4())
+                self.master_logger.warning(f'UUID {uuid} already exists, forcing a new one: {perma_uuid}.')
         else:
             perma_uuid = str(uuid4())
 
@@ -367,6 +379,8 @@ class LacusCore():
         if self.redis.zscore('lacus:ongoing', uuid) is not None:
             # the capture is ongoing
             return
+
+        self.logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
 
         retry = False
         current_score: float = 0.0
@@ -522,7 +536,7 @@ class LacusCore():
 
             if hasattr(capture, 'should_retry') and capture.should_retry:
                 # PlaywrightCapture considers this capture elligible for a retry
-                self.logger.info(f'PlaywrightCapture considers {uuid} elligible for a retry.')
+                self.logger.info('PlaywrightCapture considers it elligible for a retry.')
                 raise RetryCapture
         except RetryCapture:
             # Check if we already re-tried this capture
@@ -531,34 +545,34 @@ class LacusCore():
             else:
                 self.redis.decr(f'lacus:capture_retry:{uuid}')
             if current_retry is None or int(current_retry.decode()) > 0:
-                self.logger.debug(f'Retrying {url} - {uuid}')
+                self.logger.debug(f'Retrying {url}.')
                 # Just wait a little bit before retrying, expecially if it is the only capture in the queue
                 await asyncio.sleep(random.randint(5, 10))
                 retry = True
             else:
                 error_msg = result['error'] if result.get('error') else 'Unknown error'
-                self.logger.info(f'Retried too many times {url} - {uuid}: {error_msg}')
+                self.logger.info(f'Retried too many times {url}: {error_msg}')
 
         except CaptureError:
             if not result:
                 result = {'error': "No result key, shouldn't happen"}
-                self.logger.exception(f'Unable to capture {uuid}: {result["error"]}')
+                self.logger.exception(f'Unable to capture: {result["error"]}')
             if url:
-                self.logger.warning(f'Unable to capture {url} - {uuid}: {result["error"]}')
+                self.logger.warning(f'Unable to capture {url}: {result["error"]}')
             else:
-                self.logger.warning(f'Unable to capture {uuid}: {result["error"]}')
+                self.logger.warning(f'Unable to capture: {result["error"]}')
         except Exception as e:
-            msg = f'Something unexpected happened with {url} ({uuid}): {e}'
+            msg = f'Something unexpected happened with {url}: {e}'
             result = {'error': msg}
             self.logger.exception(msg)
         else:
             if (start_time := self.redis.zscore('lacus:ongoing', uuid)) is not None:
                 runtime = time.time() - start_time
-                self.logger.info(f'Successfully captured {url} - {uuid} - Runtime: {runtime}s')
+                self.logger.info(f'Successfully captured {url} - Runtime: {runtime}s')
                 result['runtime'] = runtime
             else:
                 # NOTE: old format, remove in 2023
-                self.logger.info(f'Successfully captured {url} - {uuid}')
+                self.logger.info(f'Successfully captured {url}')
         finally:
 
             if to_capture.get('document'):
@@ -581,4 +595,4 @@ class LacusCore():
                     retry_redis_error -= 1
                     await asyncio.sleep(random.randint(5, 10))
             else:
-                self.logger.critical(f'Unable to connect to redis and to push the result of the capture {uuid}.')
+                self.logger.critical('Unable to connect to redis and to push the result of the capture.')
