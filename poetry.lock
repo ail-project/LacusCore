@@ -189,14 +189,14 @@ files = [
 
 [[package]]
 name = "dateparser"
-version = "1.1.4"
+version = "1.1.5"
 description = "Date parsing library designed to parse dates from HTML pages"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "dateparser-1.1.4-py2.py3-none-any.whl", hash = "sha256:4431159799b63d8acec5d7d844c5e06edf3d1b0eb2bda6d4cac87134ddddd01c"},
-    {file = "dateparser-1.1.4.tar.gz", hash = "sha256:73ec6e44a133c54076ecf9f9dc0fbe3dd4831f154f977ff06f53114d57c5425e"},
+    {file = "dateparser-1.1.5-py2.py3-none-any.whl", hash = "sha256:ceb159f1b4a9df54ed6209e91298097deafde476037f8611b4cb2b1cb8b31c58"},
+    {file = "dateparser-1.1.5.tar.gz", hash = "sha256:107f3cc87a60770e10d111349adc1504224a6b60753a47a64b0ec842ab85b5a9"},
 ]
 
 [package.dependencies]
@@ -473,14 +473,14 @@ files = [
 
 [[package]]
 name = "importlib-metadata"
-version = "5.2.0"
+version = "6.0.0"
 description = "Read metadata from Python packages"
 category = "main"
 optional = true
 python-versions = ">=3.7"
 files = [
-    {file = "importlib_metadata-5.2.0-py3-none-any.whl", hash = "sha256:0eafa39ba42bf225fc00e67f701d71f85aead9f878569caf13c3724f704b970f"},
-    {file = "importlib_metadata-5.2.0.tar.gz", hash = "sha256:404d48d62bba0b7a77ff9d405efd91501bef2e67ff4ace0bed40a0cf28c3c7cd"},
+    {file = "importlib_metadata-6.0.0-py3-none-any.whl", hash = "sha256:7efb448ec9a5e313a57655d35aa54cd3e01b7e1fbcf72dce1bf06119420f5bad"},
+    {file = "importlib_metadata-6.0.0.tar.gz", hash = "sha256:e354bedeb60efa6affdcc8ae121b73544a7aa74156d047311948f6d711cd378d"},
 ]
 
 [package.dependencies]
@@ -879,19 +879,19 @@ typing-extensions = {version = "*", markers = "python_version <= \"3.8\""}
 
 [[package]]
 name = "playwrightcapture"
-version = "1.17.0"
+version = "1.17.1"
 description = "A simple library to capture websites using playwright"
 category = "main"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "playwrightcapture-1.17.0-py3-none-any.whl", hash = "sha256:f2d72ab27efb6a35d81f123e822299a780f4924101edc29772a5f0dd7077439a"},
-    {file = "playwrightcapture-1.17.0.tar.gz", hash = "sha256:3132e9dfe7a397025677e13c82bd7bd599082ed029db73af0074356c946c3c57"},
+    {file = "playwrightcapture-1.17.1-py3-none-any.whl", hash = "sha256:434c184f4317abab1d10a2fbd92a863514a714a0a374b7f40e9f3b09bb432a26"},
+    {file = "playwrightcapture-1.17.1.tar.gz", hash = "sha256:c7f61b78aff5ccd861610ff741b6e865122111a8348f7c582688035475f840ed"},
 ]
 
 [package.dependencies]
 beautifulsoup4 = ">=4.11.1,<5.0.0"
-dateparser = ">=1.1.4,<2.0.0"
+dateparser = ">=1.1.5,<2.0.0"
 lxml = ">=4.9.2,<5.0.0"
 playwright = ">=1.29.0,<2.0.0"
 pydub = {version = ">=0.25.1,<0.26.0", optional = true, markers = "extra == \"recaptcha\""}
@@ -989,14 +989,14 @@ typing-extensions = "*"
 
 [[package]]
 name = "pygments"
-version = "2.13.0"
+version = "2.14.0"
 description = "Pygments is a syntax highlighting package written in Python."
 category = "main"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "Pygments-2.13.0-py3-none-any.whl", hash = "sha256:f643f331ab57ba3c9d89212ee4a2dabc6e94f117cf4eefde99a0574720d14c42"},
-    {file = "Pygments-2.13.0.tar.gz", hash = "sha256:56a8508ae95f98e2b9bdf93a6be5ae3f7d8af858b43e02c5a2ff083726be40c1"},
+    {file = "Pygments-2.14.0-py3-none-any.whl", hash = "sha256:fa7bd7bd2771287c0de303af8bfdfc731f51bd2c6a47ab69d117138893b82717"},
+    {file = "Pygments-2.14.0.tar.gz", hash = "sha256:b3ed06a9e8ac9a9aae5a6f5dbe78a8a58655d17b43b93c078f094ddc476ae297"},
 ]
 
 [package.extras]
@@ -1262,27 +1262,27 @@ requests = ">=2.26.0"
 
 [[package]]
 name = "sphinx"
-version = "5.3.0"
+version = "6.0.0"
 description = "Python documentation generator"
 category = "main"
 optional = true
-python-versions = ">=3.6"
+python-versions = ">=3.8"
 files = [
-    {file = "Sphinx-5.3.0.tar.gz", hash = "sha256:51026de0a9ff9fc13c05d74913ad66047e104f56a129ff73e174eb5c3ee794b5"},
-    {file = "sphinx-5.3.0-py3-none-any.whl", hash = "sha256:060ca5c9f7ba57a08a1219e547b269fadf125ae25b06b9fa7f66768efb652d6d"},
+    {file = "Sphinx-6.0.0.tar.gz", hash = "sha256:58c140ecd9aa0abbc8ff6da48a266648eac9e5bfc8e49576efd2979bf46f5961"},
+    {file = "sphinx-6.0.0-py3-none-any.whl", hash = "sha256:c2aeebfcb0e7474f5a820eac6177c7492b1d3c9c535aa21d5ae77cab2f3600e4"},
 ]
 
 [package.dependencies]
 alabaster = ">=0.7,<0.8"
 babel = ">=2.9"
 colorama = {version = ">=0.4.5", markers = "sys_platform == \"win32\""}
-docutils = ">=0.14,<0.20"
+docutils = ">=0.18,<0.20"
 imagesize = ">=1.3"
 importlib-metadata = {version = ">=4.8", markers = "python_version < \"3.10\""}
 Jinja2 = ">=3.0"
 packaging = ">=21.0"
 Pygments = ">=2.12"
-requests = ">=2.5.0"
+requests = ">=2.25.0"
 snowballstemmer = ">=2.0"
 sphinxcontrib-applehelp = "*"
 sphinxcontrib-devhelp = "*"
@@ -1293,8 +1293,8 @@ sphinxcontrib-serializinghtml = ">=1.1.5"
 
 [package.extras]
 docs = ["sphinxcontrib-websupport"]
-lint = ["docutils-stubs", "flake8 (>=3.5.0)", "flake8-bugbear", "flake8-comprehensions", "flake8-simplify", "isort", "mypy (>=0.981)", "sphinx-lint", "types-requests", "types-typed-ast"]
-test = ["cython", "html5lib", "pytest (>=4.6)", "typed_ast"]
+lint = ["docutils-stubs", "flake8 (>=3.5.0)", "flake8-bugbear", "flake8-comprehensions", "flake8-simplify", "isort", "mypy (>=0.990)", "sphinx-lint", "types-requests"]
+test = ["cython", "html5lib", "pytest (>=4.6)"]
 
 [[package]]
 name = "sphinxcontrib-applehelp"
@@ -1598,4 +1598,4 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "bccbc85beaed32495f5ad30e9c7bab6a8f3de3d943927fd64d1bcf6013182e58"
+content-hash = "fa7e6cc0acbbd2b54e12cd62ec7f18fb551d3e3cd1edd883281277da32ba3868"
