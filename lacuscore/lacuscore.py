@@ -449,13 +449,13 @@ class LacusCore():
                 with open(tmp_f.name, "wb") as f:
                     f.write(document_as_bytes)
                 url = f'file://{tmp_f.name}'
-            elif to_capture.get('url'):
-                url = to_capture['url'].strip()  # type: ignore
+            elif to_capture.get('url') and to_capture['url'] is not None:
+                url = to_capture['url'].strip()
                 url = refang(url)  # In case we get a defanged url at this stage.
-                if url.startswith('file') and self.only_global_lookups:
+                if url.lower().startswith('file') and self.only_global_lookups:
                     result = {'error': f'Not allowed to capture a file on disk: {url}'}
                     raise CaptureError
-                if not url.startswith('data') and not url.startswith('http') and not url.startswith('file'):
+                if not url.lower().startswith('data') and not url.lower().startswith('http') and not url.lower().startswith('file'):
                     url = f'http://{url}'
             else:
                 result = {'error': f'No valid URL to capture for {uuid} - {to_capture}'}
