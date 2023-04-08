@@ -13,12 +13,13 @@ import socket
 import time
 import unicodedata
 
+from asyncio import Task
 from base64 import b64decode, b64encode
 from enum import IntEnum, unique
 from logging import LoggerAdapter
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Literal, Optional, Union, Dict, List, Any, TypedDict, overload, Tuple, cast, MutableMapping
+from typing import Literal, Optional, Union, Dict, List, Any, TypedDict, overload, Tuple, cast, MutableMapping, Iterator
 from uuid import uuid4
 from urllib.parse import urlsplit
 
@@ -138,17 +139,22 @@ class LacusCore():
     """Capture URLs or web enabled documents using PlaywrightCapture.
 
     :param redis_connector: Pre-configured connector to a redis instance.
+    :param max_capture time: If the capture takes more than that time, break
     :param tor_proxy: URL to a SOCKS 5 tor proxy. If you have tor installed, this is the default: socks5://127.0.0.1:9050.
     :param only_global_lookups: Discard captures that point to non-public IPs.
     :param max_retries: How many times should we re-try a capture if it failed.
     """
 
-    def __init__(self, redis_connector: Redis, tor_proxy: Optional[str]=None,
-                 only_global_lookups: bool=True, max_retries: int=3,
+    def __init__(self, redis_connector: Redis, /, *,
+                 max_capture_time: int=3600,
+                 tor_proxy: Optional[str]=None,
+                 only_global_lookups: bool=True,
+                 max_retries: int=3,
                  loglevel: str='INFO') -> None:
         self.master_logger = logging.getLogger(f'{self.__class__.__name__}')
         self.master_logger.setLevel(loglevel)
         self.redis = redis_connector
+        self.max_capture_time = max_capture_time
         self.tor_proxy = tor_proxy
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
@@ -350,7 +356,7 @@ class LacusCore():
 
         :return: The status
         """
-        if self.redis.zscore('lacus:to_capture', uuid):
+        if self.redis.zscore('lacus:to_capture', uuid) is not None:
             return CaptureStatus.QUEUED
         elif self.redis.zscore('lacus:ongoing', uuid) is not None:
             return CaptureStatus.ONGOING
@@ -358,43 +364,40 @@ class LacusCore():
             return CaptureStatus.DONE
         return CaptureStatus.UNKNOWN
 
-    async def consume_queue(self) -> Optional[str]:
-        """Trigger the capture with the highest priority
+    def consume_queue(self, max_consume: int) -> Iterator[Task]:
+        """Trigger the capture for captures with the highest priority. Up to max_consume.
 
-        :return: The UUID of the capture.
+        :yield: Captures.
         """
-        value: List[Tuple[bytes, float]] = self.redis.zpopmax('lacus:to_capture')
-        if not value or not value[0]:
-            return None
-        uuid: str = value[0][0].decode()
-        await self.capture(uuid)
-        return uuid
+        value: List[Tuple[bytes, float]]
+        while max_consume > 0:
+            value = self.redis.zpopmax('lacus:to_capture')
+            if not value:
+                # Nothing to capture
+                break
+            if not value[0]:
+                continue
+            max_consume -= 1
+            uuid: str = value[0][0].decode()
+            priority: int = int(value[0][1])
+            capture = asyncio.create_task(self._capture(uuid, priority))
+            capture.set_name(uuid)
+            yield capture
 
-    async def capture(self, uuid: str, score: Optional[Union[float, int]]=None):
+    async def _capture(self, uuid: str, priority: int):
         """Trigger a specific capture
 
         :param uuid: The UUID if the capture (given by enqueue)
-        :param score: Only for internal use, will decide ont he priority of the capture if the try now fails.
+        :param priority: Only for internal use, will decide on the priority of the capture if the try now fails.
         """
         if self.redis.zscore('lacus:ongoing', uuid) is not None:
             # the capture is ongoing
             return
 
-        self.logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
+        logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
+        self.redis.zadd('lacus:ongoing', {uuid: time.time()})
 
         retry = False
-        current_score: float = 0.0
-        if score is not None:
-            if isinstance(score, int):
-                current_score = float(score)
-            else:
-                current_score = score
-        if (s := self.redis.zscore('lacus:to_capture', uuid)) is not None:
-            # In case the capture is triggered manually
-            self.redis.zrem('lacus:to_capture', uuid)
-            current_score = s
-
-        self.redis.zadd('lacus:ongoing', {uuid: time.time()})
         try:
             setting_keys = ['depth', 'rendered_hostname_only', 'url', 'document_name',
                             'document', 'browser', 'device_name', 'user_agent', 'proxy',
@@ -479,7 +482,7 @@ class LacusCore():
                         try:
                             ips_info = socket.getaddrinfo(splitted_url.hostname, None, proto=socket.IPPROTO_TCP)
                         except socket.gaierror:
-                            self.logger.debug(f'Unable to resolve {splitted_url.hostname}.')
+                            logger.debug(f'Unable to resolve {splitted_url.hostname}.')
                             result = {'error': f'Unable to resolve {splitted_url.hostname}.'}
                             raise RetryCapture
                         except Exception as e:
@@ -505,38 +508,47 @@ class LacusCore():
                     browser_engine = 'webkit'
 
             try:
-                self.logger.debug(f'Capturing {url}')
-                async with Capture(browser=browser_engine,
-                                   device_name=to_capture.get('device_name'),
-                                   proxy=proxy,
-                                   general_timeout_in_sec=to_capture.get('general_timeout_in_sec')) as capture:
+                logger.debug(f'Capturing {url}')
+                # NOTE: starting with python 3.11, we can use asyncio.timeout
+                # async with asyncio.timeout(self.max_capture_time):
+                async with Capture(
+                        browser=browser_engine,
+                        device_name=to_capture.get('device_name'),
+                        proxy=proxy,
+                        general_timeout_in_sec=to_capture.get('general_timeout_in_sec')) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.get('headers')  # type: ignore
                     capture.cookies = to_capture.get('cookies')  # type: ignore
                     capture.viewport = to_capture.get('viewport')  # type: ignore
                     capture.user_agent = to_capture.get('user_agent')  # type: ignore
                     await capture.initialize_context()
-                    playwright_result = await capture.capture_page(
-                        url, referer=to_capture.get('referer'),
-                        depth=to_capture.get('depth', 0),
-                        rendered_hostname_only=to_capture.get('rendered_hostname_only', True))
+                    playwright_result = await asyncio.wait_for(
+                        capture.capture_page(
+                            url, referer=to_capture.get('referer'),
+                            depth=to_capture.get('depth', 0),
+                            rendered_hostname_only=to_capture.get('rendered_hostname_only', True)),
+                        timeout=self.max_capture_time)
                     result = cast(CaptureResponse, playwright_result)
             except PlaywrightCaptureException as e:
-                self.logger.exception(f'Invalid parameters for the capture of {url} - {e}')
+                logger.exception(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': 'Invalid parameters for the capture of {url} - {e}'}
                 raise CaptureError
             except asyncio.CancelledError:
-                self.logger.warning(f'The capture of {url} has been cancelled.')
+                logger.warning(f'The capture of {url} has been cancelled.')
                 result = {'error': f'The capture of {url} has been cancelled.'}
                 raise CaptureError
+            except TimeoutError:
+                logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+                result = {'error': f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)'}
+                raise CaptureError
             except Exception as e:
-                self.logger.exception(f'Something went poorly {url} - {e}')
+                logger.exception(f'Something went poorly {url} - {e}')
                 result = {'error': f'Something went poorly {url} - {e}'}
                 raise CaptureError
 
             if hasattr(capture, 'should_retry') and capture.should_retry:
                 # PlaywrightCapture considers this capture elligible for a retry
-                self.logger.info('PlaywrightCapture considers it elligible for a retry.')
+                logger.info('PlaywrightCapture considers it elligible for a retry.')
                 raise RetryCapture
         except RetryCapture:
             # Check if we already re-tried this capture
@@ -545,34 +557,31 @@ class LacusCore():
             else:
                 self.redis.decr(f'lacus:capture_retry:{uuid}')
             if current_retry is None or int(current_retry.decode()) > 0:
-                self.logger.debug(f'Retrying {url}.')
+                logger.debug(f'Retrying {url}.')
                 # Just wait a little bit before retrying, expecially if it is the only capture in the queue
                 await asyncio.sleep(random.randint(5, 10))
                 retry = True
             else:
                 error_msg = result['error'] if result.get('error') else 'Unknown error'
-                self.logger.info(f'Retried too many times {url}: {error_msg}')
+                logger.info(f'Retried too many times {url}: {error_msg}')
 
         except CaptureError:
             if not result:
                 result = {'error': "No result key, shouldn't happen"}
-                self.logger.exception(f'Unable to capture: {result["error"]}')
+                logger.exception(f'Unable to capture: {result["error"]}')
             if url:
-                self.logger.warning(f'Unable to capture {url}: {result["error"]}')
+                logger.warning(f'Unable to capture {url}: {result["error"]}')
             else:
-                self.logger.warning(f'Unable to capture: {result["error"]}')
+                logger.warning(f'Unable to capture: {result["error"]}')
         except Exception as e:
             msg = f'Something unexpected happened with {url}: {e}'
             result = {'error': msg}
-            self.logger.exception(msg)
+            logger.exception(msg)
         else:
-            if (start_time := self.redis.zscore('lacus:ongoing', uuid)) is not None:
-                runtime = time.time() - start_time
-                self.logger.info(f'Successfully captured {url} - Runtime: {runtime}s')
-                result['runtime'] = runtime
-            else:
-                # NOTE: old format, remove in 2023
-                self.logger.info(f'Successfully captured {url}')
+            start_time = self.redis.zscore('lacus:ongoing', uuid)
+            runtime = time.time() - start_time
+            logger.info(f'Successfully captured {url} - Runtime: {runtime}s')
+            result['runtime'] = runtime
         finally:
 
             if to_capture.get('document'):
@@ -583,7 +592,7 @@ class LacusCore():
                 try:
                     p = self.redis.pipeline()
                     if retry:
-                        p.zadd('lacus:to_capture', {uuid: current_score - 1})
+                        p.zadd('lacus:to_capture', {uuid: priority - 1})
                     else:
                         p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
                         p.delete(f'lacus:capture_settings:{uuid}')
@@ -591,8 +600,17 @@ class LacusCore():
                     p.execute()
                     break
                 except RedisConnectionError as e:
-                    self.logger.warning(f'Redis Connection Error: {e}')
+                    logger.warning(f'Redis Connection Error: {e}')
                     retry_redis_error -= 1
                     await asyncio.sleep(random.randint(5, 10))
             else:
-                self.logger.critical('Unable to connect to redis and to push the result of the capture.')
+                logger.critical('Unable to connect to redis and to push the result of the capture.')
+
+    def clear_capture(self, uuid: str, reason: str):
+        '''Remove a capture from the list, shouldn't happen unless it is in error'''
+        result = {'error': reason}
+        p = self.redis.pipeline()
+        p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
+        p.delete(f'lacus:capture_settings:{uuid}')
+        p.zrem('lacus:ongoing', uuid)
+        p.execute()
