@@ -537,7 +537,7 @@ class LacusCore():
                 logger.warning(f'The capture of {url} has been cancelled.')
                 result = {'error': f'The capture of {url} has been cancelled.'}
                 raise CaptureError
-            except TimeoutError:
+            except (TimeoutError, asyncio.exceptions.TimeoutError):
                 logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
                 result = {'error': f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)'}
                 raise CaptureError
