@@ -578,10 +578,12 @@ class LacusCore():
             result = {'error': msg}
             logger.exception(msg)
         else:
-            start_time = self.redis.zscore('lacus:ongoing', uuid)
-            runtime = time.time() - start_time
-            logger.info(f'Successfully captured {url} - Runtime: {runtime}s')
-            result['runtime'] = runtime
+            if start_time := self.redis.zscore('lacus:ongoing', uuid):
+                runtime = time.time() - start_time
+                logger.info(f'Successfully captured {url} - Runtime: {runtime}s')
+                result['runtime'] = runtime
+            else:
+                logger.info(f'Successfully captured {url} - No Runtime.')
         finally:
 
             if to_capture.get('document'):
