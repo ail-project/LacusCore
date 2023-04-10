@@ -528,7 +528,6 @@ class LacusCore():
                             depth=to_capture.get('depth', 0),
                             rendered_hostname_only=to_capture.get('rendered_hostname_only', True)),
                         timeout=self.max_capture_time)
-                    result = cast(CaptureResponse, playwright_result)
             except PlaywrightCaptureException as e:
                 logger.exception(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': 'Invalid parameters for the capture of {url} - {e}'}
@@ -546,14 +545,14 @@ class LacusCore():
                 result = {'error': f'Something went poorly {url} - {e}'}
                 raise CaptureError
 
-            if hasattr(capture, 'should_retry') and capture.should_retry:
+            if capture.should_retry:
                 # PlaywrightCapture considers this capture elligible for a retry
                 logger.info('PlaywrightCapture considers it elligible for a retry.')
                 raise RetryCapture
         except RetryCapture:
             # Check if we already re-tried this capture
             if (current_retry := self.redis.get(f'lacus:capture_retry:{uuid}')) is None:
-                self.redis.setex(f'lacus:capture_retry:{uuid}', 300, self.max_retries)
+                self.redis.setex(f'lacus:capture_retry:{uuid}', self.max_capture_time * (self.max_retries + 1), self.max_retries)
             else:
                 self.redis.decr(f'lacus:capture_retry:{uuid}')
             if current_retry is None or int(current_retry.decode()) > 0:
@@ -578,6 +577,7 @@ class LacusCore():
             result = {'error': msg}
             logger.exception(msg)
         else:
+            result = cast(CaptureResponse, playwright_result)
             if start_time := self.redis.zscore('lacus:ongoing', uuid):
                 runtime = time.time() - start_time
                 logger.info(f'Successfully captured {url} - Runtime: {runtime}s')
