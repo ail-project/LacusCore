@@ -526,7 +526,8 @@ class LacusCore():
                         capture.capture_page(
                             url, referer=to_capture.get('referer'),
                             depth=to_capture.get('depth', 0),
-                            rendered_hostname_only=to_capture.get('rendered_hostname_only', True)),
+                            rendered_hostname_only=to_capture.get('rendered_hostname_only', True),
+                            max_depth_capture_time=self.max_capture_time),
                         timeout=self.max_capture_time)
             except PlaywrightCaptureException as e:
                 logger.exception(f'Invalid parameters for the capture of {url} - {e}')
