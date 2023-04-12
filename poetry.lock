@@ -1058,14 +1058,14 @@ typing-extensions = {version = "*", markers = "python_version <= \"3.8\""}
 
 [[package]]
 name = "playwrightcapture"
-version = "1.19.8"
+version = "1.19.9"
 description = "A simple library to capture websites using playwright"
 category = "main"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "playwrightcapture-1.19.8-py3-none-any.whl", hash = "sha256:f0086bbca8a976b000d7fd6de6c775a6e70b73efe3ca700b816a28ebafe60520"},
-    {file = "playwrightcapture-1.19.8.tar.gz", hash = "sha256:8e958184a06a8e231a889cbaa66e9f4ce18b2aefa5b49fd0c901805d0ad68e1b"},
+    {file = "playwrightcapture-1.19.9-py3-none-any.whl", hash = "sha256:621ffaefd9a2e80f9036cd64291d66196f16397dc8f987f0c938309b5a76086b"},
+    {file = "playwrightcapture-1.19.9.tar.gz", hash = "sha256:4047ab6a0392cd1004279d09e4df509bcced304189a680400f6332039fbeabeb"},
 ]
 
 [package.dependencies]
@@ -1781,4 +1781,4 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "5041a754980daf0ab3f1a7ef345a084388a91d1a0cd6d6904c9df919154529d8"
+content-hash = "32af53a967cc1305593e045c6d17257e18806e94167d145923929b2c37a8b656"
