@@ -511,17 +511,22 @@ class LacusCore():
                 logger.debug(f'Capturing {url}')
                 # NOTE: starting with python 3.11, we can use asyncio.timeout
                 # async with asyncio.timeout(self.max_capture_time):
+                general_timeout = to_capture.get('general_timeout_in_sec')
                 async with Capture(
                         browser=browser_engine,
                         device_name=to_capture.get('device_name'),
                         proxy=proxy,
-                        general_timeout_in_sec=to_capture.get('general_timeout_in_sec')) as capture:
+                        general_timeout_in_sec=general_timeout) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.get('headers')  # type: ignore
                     capture.cookies = to_capture.get('cookies')  # type: ignore
                     capture.viewport = to_capture.get('viewport')  # type: ignore
                     capture.user_agent = to_capture.get('user_agent')  # type: ignore
-                    await capture.initialize_context()
+                    try:
+                        await asyncio.wait_for(capture.initialize_context(), timeout=general_timeout)
+                    except (TimeoutError, asyncio.exceptions.TimeoutError):
+                        logger.warning(f'Initializing the context for {url} took longer than the allowed general timeout ({general_timeout}s)')
+                        raise RetryCapture
                     playwright_result = await asyncio.wait_for(
                         capture.capture_page(
                             url, referer=to_capture.get('referer'),
