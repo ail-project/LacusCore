@@ -1098,14 +1098,14 @@ typing-extensions = {version = "*", markers = "python_version <= \"3.8\""}
 
 [[package]]
 name = "playwrightcapture"
-version = "1.19.13"
+version = "1.19.15"
 description = "A simple library to capture websites using playwright"
 category = "main"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "playwrightcapture-1.19.13-py3-none-any.whl", hash = "sha256:914248734306833abff39042d2f64b1476d91a72084b6aa0666db35d9a02e9cd"},
-    {file = "playwrightcapture-1.19.13.tar.gz", hash = "sha256:942c1206a066e980ef054b66074bdc5f2b6e36e10f1c7230410fb5ad5c7ffd7e"},
+    {file = "playwrightcapture-1.19.15-py3-none-any.whl", hash = "sha256:dad56a1c6129a43f83d2787769159c664c7a5dc78f7f4698757e83581dcbb1a7"},
+    {file = "playwrightcapture-1.19.15.tar.gz", hash = "sha256:dacb79377dcc39c13b60a0516d4921f7e29a7bd1b91ba9302b9cae67e4eb71f7"},
 ]
 
 [package.dependencies]
@@ -1716,14 +1716,14 @@ files = [
 
 [[package]]
 name = "typing-extensions"
-version = "4.6.0"
+version = "4.6.2"
 description = "Backported and Experimental Type Hints for Python 3.7+"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "typing_extensions-4.6.0-py3-none-any.whl", hash = "sha256:6ad00b63f849b7dcc313b70b6b304ed67b2b2963b3098a33efe18056b1a9a223"},
-    {file = "typing_extensions-4.6.0.tar.gz", hash = "sha256:ff6b238610c747e44c268aa4bb23c8c735d665a63726df3f9431ce707f2aa768"},
+    {file = "typing_extensions-4.6.2-py3-none-any.whl", hash = "sha256:3a8b36f13dd5fdc5d1b16fe317f5668545de77fa0b8e02006381fd49d731ab98"},
+    {file = "typing_extensions-4.6.2.tar.gz", hash = "sha256:06006244c70ac8ee83fa8282cb188f697b8db25bc8b4df07be1873c43897060c"},
 ]
 
 [[package]]
@@ -1833,4 +1833,4 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "f19366644ba2ca17275146306d2fd041c61b82c67df55c0105bfdccca436d958"
+content-hash = "3d4acfcd1e68e53ba348e7f513dc2b866a303e1d996969154b23ab4004ce4061"
