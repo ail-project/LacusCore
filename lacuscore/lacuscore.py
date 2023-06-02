@@ -419,9 +419,9 @@ class LacusCore():
                         to_capture[k] = json.loads(v)  # type: ignore
                     elif k in ['proxy', 'headers']:
                         # can be dict or str
-                        if v[0] == b'{':
+                        try:
                             to_capture[k] = json.loads(v)  # type: ignore
-                        else:
+                        except Exception:
                             to_capture[k] = v.decode()  # type: ignore
                     elif k in ['general_timeout_in_sec', 'depth']:
                         # int
