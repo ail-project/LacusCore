@@ -108,7 +108,11 @@ class CaptureSettings(TypedDict, total=False):
     general_timeout_in_sec: Optional[int]
     cookies: Optional[List[Dict[str, Any]]]
     headers: Optional[Union[str, Dict[str, str]]]
-    http_credentials: Optional[Dict[str, int]]
+    http_credentials: Optional[Dict[str, str]]
+    geolocation: Optional[Dict[str, float]]
+    timezone_id: Optional[str]
+    locale: Optional[str]
+    color_scheme: Optional[str]
     viewport: Optional[Dict[str, int]]
     referer: Optional[str]
     force: Optional[bool]
@@ -182,7 +186,11 @@ class LacusCore():
                 general_timeout_in_sec: Optional[int]=None,
                 cookies: Optional[List[Dict[str, Any]]]=None,
                 headers: Optional[Union[str, Dict[str, str]]]=None,
-                http_credentials: Optional[Dict[str, int]]=None,
+                http_credentials: Optional[Dict[str, str]]=None,
+                geolocation: Optional[Dict[str, float]]=None,
+                timezone_id: Optional[str]=None,
+                locale: Optional[str]=None,
+                color_scheme: Optional[str]=None,
                 viewport: Optional[Dict[str, int]]=None,
                 referer: Optional[str]=None,
                 rendered_hostname_only: bool=True,
@@ -204,7 +212,11 @@ class LacusCore():
                 general_timeout_in_sec: Optional[int]=None,
                 cookies: Optional[List[Dict[str, Any]]]=None,
                 headers: Optional[Union[str, Dict[str, str]]]=None,
-                http_credentials: Optional[Dict[str, int]]=None,
+                http_credentials: Optional[Dict[str, str]]=None,
+                geolocation: Optional[Dict[str, float]]=None,
+                timezone_id: Optional[str]=None,
+                locale: Optional[str]=None,
+                color_scheme: Optional[str]=None,
                 viewport: Optional[Dict[str, int]]=None,
                 referer: Optional[str]=None,
                 rendered_hostname_only: bool=True,
@@ -229,6 +241,10 @@ class LacusCore():
         :param cookies: A list of cookies
         :param headers: The headers to pass to the capture
         :param http_credentials: HTTP Credentials to pass to the capture
+        :param geolocation: Geolocation of the browser to pass to the capture
+        :param timezone_id: The timezone of the browser to pass to the capture
+        :param locale: The locale of the browser to pass to the capture
+        :param color_scheme: The prefered color scheme of the browser to pass to the capture
         :param viewport: The viewport of the browser used for capturing
         :param referer: The referer URL for the capture
         :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
@@ -271,6 +287,14 @@ class LacusCore():
                 to_enqueue['headers'] = headers
             if http_credentials:
                 to_enqueue['http_credentials'] = http_credentials
+            if geolocation:
+                to_enqueue['geolocation'] = geolocation
+            if timezone_id:
+                to_enqueue['timezone_id'] = timezone_id
+            if locale:
+                to_enqueue['locale'] = locale
+            if color_scheme:
+                to_enqueue['color_scheme'] = color_scheme
             if viewport:
                 to_enqueue['viewport'] = viewport
             if referer:
@@ -402,7 +426,8 @@ class LacusCore():
             setting_keys = ['depth', 'rendered_hostname_only', 'url', 'document_name',
                             'document', 'browser', 'device_name', 'user_agent', 'proxy',
                             'general_timeout_in_sec', 'cookies', 'headers', 'http_credentials',
-                            'viewport', 'referer']
+                            'viewport', 'referer', 'geolocation', 'timezone_id', 'locale',
+                            'color_scheme']
             result: CaptureResponse = {}
             to_capture: CaptureSettings = {}
             document_as_bytes = b''
@@ -411,10 +436,11 @@ class LacusCore():
                 for k, v in zip(setting_keys, self.redis.hmget(f'lacus:capture_settings:{uuid}', setting_keys)):
                     if v is None:
                         continue
-                    if k in ['url', 'document_name', 'browser', 'device_name', 'user_agent', 'referer']:
+                    if k in ['url', 'document_name', 'browser', 'device_name', 'user_agent',
+                             'referer', 'timezone_id', 'locale', 'color_scheme']:
                         # string
                         to_capture[k] = v.decode()  # type: ignore
-                    elif k in ['cookies', 'http_credentials', 'viewport']:
+                    elif k in ['cookies', 'http_credentials', 'viewport', 'geolocation']:
                         # dicts or list
                         to_capture[k] = json.loads(v)  # type: ignore
                     elif k in ['proxy', 'headers']:
@@ -522,6 +548,11 @@ class LacusCore():
                     capture.cookies = to_capture.get('cookies')  # type: ignore
                     capture.viewport = to_capture.get('viewport')  # type: ignore
                     capture.user_agent = to_capture.get('user_agent')  # type: ignore
+                    capture.http_credentials = to_capture.get('http_credentials')  # type: ignore
+                    capture.geolocation = to_capture.get('geolocation')  # type: ignore
+                    capture.timezone_id = to_capture.get('timezone_id')  # type: ignore
+                    capture.locale = to_capture.get('locale')  # type: ignore
+                    capture.color_scheme = to_capture.get('locale')  # type: ignore
                     try:
                         await asyncio.wait_for(capture.initialize_context(), timeout=general_timeout)
                     except (TimeoutError, asyncio.exceptions.TimeoutError):
