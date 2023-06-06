@@ -567,7 +567,7 @@ class LacusCore():
                         timeout=self.max_capture_time)
             except PlaywrightCaptureException as e:
                 logger.exception(f'Invalid parameters for the capture of {url} - {e}')
-                result = {'error': 'Invalid parameters for the capture of {url} - {e}'}
+                result = {'error': f'Invalid parameters for the capture of {url} - {e}'}
                 raise CaptureError
             except asyncio.CancelledError:
                 logger.warning(f'The capture of {url} has been cancelled.')
