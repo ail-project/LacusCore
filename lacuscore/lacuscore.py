@@ -552,7 +552,7 @@ class LacusCore():
                     capture.geolocation = to_capture.get('geolocation')  # type: ignore
                     capture.timezone_id = to_capture.get('timezone_id')  # type: ignore
                     capture.locale = to_capture.get('locale')  # type: ignore
-                    capture.color_scheme = to_capture.get('locale')  # type: ignore
+                    capture.color_scheme = to_capture.get('color_scheme')  # type: ignore
                     try:
                         await asyncio.wait_for(capture.initialize_context(), timeout=general_timeout)
                     except (TimeoutError, asyncio.exceptions.TimeoutError):
