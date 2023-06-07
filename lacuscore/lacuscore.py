@@ -324,7 +324,7 @@ class LacusCore():
             elif isinstance(value, (list, dict)):
                 if value:
                     mapping_capture[key] = json.dumps(value)
-            elif value is not None:
+            elif value is not None and value != '':  # we're ok with 0 for example
                 mapping_capture[key] = value  # type: ignore
 
         p = self.redis.pipeline()
