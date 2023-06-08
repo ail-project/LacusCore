@@ -10,6 +10,7 @@ import pickle
 import random
 import re
 import socket
+import sys
 import time
 import unicodedata
 
@@ -532,7 +533,6 @@ class LacusCore():
                     browser_engine = 'firefox'
                 else:
                     browser_engine = 'webkit'
-
             try:
                 logger.debug(f'Capturing {url}')
                 # NOTE: starting with python 3.11, we can use asyncio.timeout
@@ -629,17 +629,19 @@ class LacusCore():
             retry_redis_error = 3
             while retry_redis_error > 0:
                 try:
+                    to_store = ''
                     p = self.redis.pipeline()
                     if retry:
                         p.zadd('lacus:to_capture', {uuid: priority - 1})
                     else:
-                        p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
+                        to_store = json.dumps(result, default=_json_encode)
+                        p.setex(f'lacus:capture_results:{uuid}', 36000, to_store)
                         p.delete(f'lacus:capture_settings:{uuid}')
                     p.zrem('lacus:ongoing', uuid)
                     p.execute()
                     break
                 except RedisConnectionError as e:
-                    logger.warning(f'Redis Connection Error: {e}')
+                    logger.warning(f'Unable to store capture result (size: {sys.getsizeof(to_store)} - Redis Connection Error: {e}')
                     retry_redis_error -= 1
                     await asyncio.sleep(random.randint(5, 10))
             else:
