@@ -13,6 +13,7 @@ import socket
 import sys
 import time
 import unicodedata
+import zlib
 
 from asyncio import Task
 from base64 import b64decode, b64encode
@@ -335,16 +336,16 @@ class LacusCore():
         p.execute()
         return perma_uuid
 
-    def _decode_response(self, capture: CaptureResponseJson) -> CaptureResponse:
-        decoded_capture = cast(CaptureResponse, capture)
+    def _encode_response(self, capture: CaptureResponse) -> CaptureResponseJson:
+        encoded_capture = cast(CaptureResponseJson, capture)
         if capture.get('png') and capture['png']:
-            decoded_capture['png'] = b64decode(capture['png'])
+            encoded_capture['png'] = b64encode(capture['png']).decode()
         if capture.get('downloaded_file') and capture['downloaded_file']:
-            decoded_capture['downloaded_file'] = b64decode(capture['downloaded_file'])
+            encoded_capture['downloaded_file'] = b64encode(capture['downloaded_file']).decode()
         if capture.get('children') and capture['children']:
             for child in capture['children']:
-                child = self._decode_response(child)
-        return decoded_capture
+                child = self._encode_response(child)
+        return encoded_capture
 
     @overload
     def get_capture(self, uuid: str, *, decode: Literal[True]=True) -> CaptureResponse:
@@ -362,16 +363,18 @@ class LacusCore():
 
         :return: The capture, decoded or not.
         """
-        to_return: CaptureResponseJson = {'status': CaptureStatus.UNKNOWN}
+        to_return: CaptureResponse = {'status': CaptureStatus.UNKNOWN}
         if self.redis.zscore('lacus:to_capture', uuid):
             to_return['status'] = CaptureStatus.QUEUED
         elif self.redis.zscore('lacus:ongoing', uuid) is not None:
             to_return['status'] = CaptureStatus.ONGOING
         elif response := self.redis.get(f'lacus:capture_results:{uuid}'):
             to_return['status'] = CaptureStatus.DONE
-            to_return.update(json.loads(response))
+            response_json = pickle.loads(zlib.decompress(response))
+            to_return.update(response_json)
             if decode:
-                return self._decode_response(to_return)
+                return to_return
+            return self._encode_response(to_return)
         return to_return
 
     def get_capture_status(self, uuid: str) -> CaptureStatus:
@@ -629,12 +632,12 @@ class LacusCore():
             retry_redis_error = 3
             while retry_redis_error > 0:
                 try:
-                    to_store = ''
+                    to_store = b''
                     p = self.redis.pipeline()
                     if retry:
                         p.zadd('lacus:to_capture', {uuid: priority - 1})
                     else:
-                        to_store = json.dumps(result, default=_json_encode)
+                        to_store = zlib.compress(pickle.dumps(result))
                         p.setex(f'lacus:capture_results:{uuid}', 36000, to_store)
                         p.delete(f'lacus:capture_settings:{uuid}')
                     p.zrem('lacus:ongoing', uuid)
@@ -651,7 +654,8 @@ class LacusCore():
         '''Remove a capture from the list, shouldn't happen unless it is in error'''
         result = {'error': reason}
         p = self.redis.pipeline()
-        p.setex(f'lacus:capture_results:{uuid}', 36000, json.dumps(result, default=_json_encode))
+        to_store = zlib.compress(pickle.dumps(result))
+        p.setex(f'lacus:capture_results:{uuid}', 36000, to_store)
         p.delete(f'lacus:capture_settings:{uuid}')
         p.zrem('lacus:ongoing', uuid)
         p.execute()
