@@ -477,6 +477,10 @@ class LacusCore():
                 name = to_capture.pop('document_name', None)
                 if not name:
                     raise LacusCoreException('No document name provided, settings are invalid')
+                if not Path(name).suffix:
+                    # The browser will simply display the file as text if there is no extension.
+                    # Just add HTML as a fallback, as it will be the most comon one.
+                    name = f'{name}.html'
                 document_name = Path(name).name
                 tmp_f = NamedTemporaryFile(suffix=document_name, delete=False)
                 with open(tmp_f.name, "wb") as f:
