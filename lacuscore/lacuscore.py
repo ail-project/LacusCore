@@ -338,9 +338,9 @@ class LacusCore():
 
     def _encode_response(self, capture: CaptureResponse) -> CaptureResponseJson:
         encoded_capture = cast(CaptureResponseJson, capture)
-        if capture.get('png'):
+        if capture.get('png') is not None:
             encoded_capture['png'] = b64encode(capture['png']).decode()
-        if capture.get('downloaded_file'):
+        if capture.get('downloaded_file') is not None:
             encoded_capture['downloaded_file'] = b64encode(capture['downloaded_file']).decode()
         if capture.get('children') and capture['children']:
             for child in capture['children']:
