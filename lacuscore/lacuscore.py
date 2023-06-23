@@ -17,6 +17,7 @@ import zlib
 
 from asyncio import Task
 from base64 import b64decode, b64encode
+from datetime import date
 from enum import IntEnum, unique
 from logging import LoggerAdapter
 from pathlib import Path
@@ -424,6 +425,7 @@ class LacusCore():
 
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
         self.redis.zadd('lacus:ongoing', {uuid: time.time()})
+        today = date.today().isoformat()
 
         retry = False
         try:
@@ -572,6 +574,12 @@ class LacusCore():
                             rendered_hostname_only=to_capture.get('rendered_hostname_only', True),
                             max_depth_capture_time=self.max_capture_time),
                         timeout=self.max_capture_time)
+                    if 'error' in playwright_result and 'error_name' in playwright_result:
+                        # generate stats
+                        if playwright_result['error_name'] is not None:
+                            self.redis.zincrby(f'stats:{today}:errors', 1, playwright_result['error_name'])
+                            # Expire it in 10 days
+                            self.redis.expire(f'stats:{today}:errors', 3600 * 24 * 10)
             except PlaywrightCaptureException as e:
                 logger.exception(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': f'Invalid parameters for the capture of {url} - {e}'}
@@ -607,6 +615,8 @@ class LacusCore():
             else:
                 error_msg = result['error'] if result.get('error') else 'Unknown error'
                 logger.info(f'Retried too many times {url}: {error_msg}')
+                self.redis.sadd(f'stats:{today}:retry_failed', url)
+                self.redis.expire(f'stats:{today}:retry_failed', 3600 * 24 * 10)
 
         except CaptureError:
             if not result:
