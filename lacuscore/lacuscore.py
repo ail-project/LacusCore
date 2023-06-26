@@ -17,7 +17,7 @@ import zlib
 
 from asyncio import Task
 from base64 import b64decode, b64encode
-from datetime import date
+from datetime import date, timedelta
 from enum import IntEnum, unique
 from logging import LoggerAdapter
 from pathlib import Path
@@ -425,6 +425,7 @@ class LacusCore():
 
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
         self.redis.zadd('lacus:ongoing', {uuid: time.time()})
+        stats_pipeline = self.redis.pipeline()
         today = date.today().isoformat()
 
         retry = False
@@ -547,6 +548,7 @@ class LacusCore():
                 # NOTE: starting with python 3.11, we can use asyncio.timeout
                 # async with asyncio.timeout(self.max_capture_time):
                 general_timeout = to_capture.get('general_timeout_in_sec')
+                stats_pipeline.sadd(f'stats:{today}:captures', url)
                 async with Capture(
                         browser=browser_engine,
                         device_name=to_capture.get('device_name'),
@@ -577,9 +579,7 @@ class LacusCore():
                     if 'error' in playwright_result and 'error_name' in playwright_result:
                         # generate stats
                         if playwright_result['error_name'] is not None:
-                            self.redis.zincrby(f'stats:{today}:errors', 1, playwright_result['error_name'])
-                            # Expire it in 10 days
-                            self.redis.expire(f'stats:{today}:errors', 3600 * 24 * 10)
+                            stats_pipeline.zincrby(f'stats:{today}:errors', 1, playwright_result['error_name'])
             except PlaywrightCaptureException as e:
                 logger.exception(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': f'Invalid parameters for the capture of {url} - {e}'}
@@ -603,21 +603,24 @@ class LacusCore():
                 raise RetryCapture
         except RetryCapture:
             # Check if we already re-tried this capture
-            if (current_retry := self.redis.get(f'lacus:capture_retry:{uuid}')) is None:
-                self.redis.setex(f'lacus:capture_retry:{uuid}', self.max_capture_time * (self.max_retries + 1), self.max_retries)
-            else:
-                self.redis.decr(f'lacus:capture_retry:{uuid}')
-            if current_retry is None or int(current_retry.decode()) > 0:
-                logger.debug(f'Retrying {url}.')
-                # Just wait a little bit before retrying, expecially if it is the only capture in the queue
-                await asyncio.sleep(random.randint(5, 10))
+            _current_retry = self.redis.get(f'lacus:capture_retry:{uuid}')
+            if _current_retry is None:
+                # No retry yet
+                logger.debug(f'Retrying {url} for the first time.')
                 retry = True
+                self.redis.setex(f'lacus:capture_retry:{uuid}',
+                                 self.max_capture_time * (self.max_retries + 1),
+                                 self.max_retries)
             else:
-                error_msg = result['error'] if result.get('error') else 'Unknown error'
-                logger.info(f'Retried too many times {url}: {error_msg}')
-                self.redis.sadd(f'stats:{today}:retry_failed', url)
-                self.redis.expire(f'stats:{today}:retry_failed', 3600 * 24 * 10)
-
+                current_retry = int(_current_retry.decode())
+                if current_retry > 0:
+                    logger.debug(f'Retrying {url} for the {self.max_retries-current_retry+1}th time.')
+                    self.redis.decr(f'lacus:capture_retry:{uuid}')
+                    retry = True
+                else:
+                    error_msg = result['error'] if result.get('error') else 'Unknown error'
+                    logger.info(f'Retried too many times {url}: {error_msg}')
+                    stats_pipeline.sadd(f'stats:{today}:retry_failed', url)
         except CaptureError:
             if not result:
                 result = {'error': "No result key, shouldn't happen"}
@@ -634,35 +637,45 @@ class LacusCore():
             result = cast(CaptureResponse, playwright_result)
             if start_time := self.redis.zscore('lacus:ongoing', uuid):
                 runtime = time.time() - start_time
-                logger.info(f'Successfully captured {url} - Runtime: {runtime}s')
+                logger.info(f'Capture of {url} finished - Runtime: {runtime}s')
                 result['runtime'] = runtime
             else:
-                logger.info(f'Successfully captured {url} - No Runtime.')
+                logger.info(f'Capture of {url} finished - No Runtime.')
         finally:
 
             if to_capture.get('document'):
                 os.unlink(tmp_f.name)
 
-            retry_redis_error = 3
-            while retry_redis_error > 0:
-                try:
-                    to_store = b''
-                    p = self.redis.pipeline()
-                    if retry:
-                        p.zadd('lacus:to_capture', {uuid: priority - 1})
-                    else:
-                        to_store = zlib.compress(pickle.dumps(result))
+            if retry:
+                if self.redis.zcard('lacus:to_capture') == 0:
+                    # Just wait a little bit before retrying
+                    await asyncio.sleep(random.randint(5, 10))
+                self.redis.zadd('lacus:to_capture', {uuid: priority - 1})
+            else:
+                to_store = zlib.compress(pickle.dumps(result))
+                retry_redis_error = 3
+                while retry_redis_error > 0:
+                    try:
+                        p = self.redis.pipeline()
                         p.setex(f'lacus:capture_results:{uuid}', 36000, to_store)
                         p.delete(f'lacus:capture_settings:{uuid}')
-                    p.zrem('lacus:ongoing', uuid)
-                    p.execute()
-                    break
-                except RedisConnectionError as e:
-                    logger.warning(f'Unable to store capture result (size: {sys.getsizeof(to_store)} - Redis Connection Error: {e}')
-                    retry_redis_error -= 1
-                    await asyncio.sleep(random.randint(5, 10))
-            else:
-                logger.critical('Unable to connect to redis and to push the result of the capture.')
+                        p.zrem('lacus:ongoing', uuid)
+                        p.execute()
+                        break
+                    except RedisConnectionError as e:
+                        logger.warning(f'Unable to store capture result (size: {sys.getsizeof(to_store)} - Redis Connection Error: {e}')
+                        retry_redis_error -= 1
+                        await asyncio.sleep(random.randint(5, 10))
+                else:
+                    stats_pipeline.zincrby(f'stats:{today}:errors', 1, 'Redis Connection')
+                    logger.critical('Unable to connect to redis and to push the result of the capture.')
+
+            # Expire stats in 10 days
+            expire_time = timedelta(days=10)
+            stats_pipeline.expire(f'stats:{today}:errors', expire_time)
+            stats_pipeline.expire(f'stats:{today}:retry_failed', expire_time)
+            stats_pipeline.expire(f'stats:{today}:captures', expire_time)
+            stats_pipeline.execute()
 
     def clear_capture(self, uuid: str, reason: str):
         '''Remove a capture from the list, shouldn't happen unless it is in error'''
