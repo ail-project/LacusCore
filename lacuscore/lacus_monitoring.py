@@ -46,6 +46,8 @@ class LacusCoreMonitoring():
             to_return['errors'] = errors
         if retry_failed := self.redis.smembers(f'stats:{_date}:retry_failed'):
             to_return['retry_failed'] = retry_failed
+        if retry_success := self.redis.smembers(f'stats:{_date}:retry_success'):
+            to_return['retry_success'] = retry_success
         if captures := self.redis.smembers(f'stats:{_date}:captures'):
             to_return['captures'] = captures
         return to_return

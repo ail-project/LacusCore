@@ -472,7 +472,8 @@ class LacusCore():
                 raise LacusCoreException(f'Error while preparing settings: {e}')
 
             if not to_capture:
-                result = {'error': f'No capture settings for {uuid}.'}
+                all_entries = self.redis.hgetall(f'lacus:capture_settings:{uuid}')
+                result = {'error': f'No capture settings for {uuid} - {all_entries}'}
                 raise CaptureError
 
             if document_as_bytes:
@@ -601,6 +602,9 @@ class LacusCore():
                 # PlaywrightCapture considers this capture elligible for a retry
                 logger.info('PlaywrightCapture considers it elligible for a retry.')
                 raise RetryCapture
+            elif self.redis.exists(f'lacus:capture_retry:{uuid}'):
+                # this is a retry that worked
+                stats_pipeline.sadd(f'stats:{today}:retry_success', url)
         except RetryCapture:
             # Check if we already re-tried this capture
             _current_retry = self.redis.get(f'lacus:capture_retry:{uuid}')
@@ -642,6 +646,9 @@ class LacusCore():
             else:
                 logger.info(f'Capture of {url} finished - No Runtime.')
         finally:
+            # NOTE: in this block, we absolutely have to make sure the UUID is removed
+            #       from the lacus:ongoing sorted set (it is definitely not ongoing anymore)
+            #       and optionally re-added to lacus:to_capture if re want to retry it
 
             if to_capture.get('document'):
                 os.unlink(tmp_f.name)
@@ -650,7 +657,10 @@ class LacusCore():
                 if self.redis.zcard('lacus:to_capture') == 0:
                     # Just wait a little bit before retrying
                     await asyncio.sleep(random.randint(5, 10))
-                self.redis.zadd('lacus:to_capture', {uuid: priority - 1})
+                p = self.redis.pipeline()
+                p.zrem('lacus:ongoing', uuid)
+                p.zadd('lacus:to_capture', {uuid: priority - 1})
+                p.execute()
             else:
                 to_store = zlib.compress(pickle.dumps(result))
                 retry_redis_error = 3
@@ -667,6 +677,7 @@ class LacusCore():
                         retry_redis_error -= 1
                         await asyncio.sleep(random.randint(5, 10))
                 else:
+                    self.redis.zrem('lacus:ongoing', uuid)
                     stats_pipeline.zincrby(f'stats:{today}:errors', 1, 'Redis Connection')
                     logger.critical('Unable to connect to redis and to push the result of the capture.')
 
@@ -674,11 +685,17 @@ class LacusCore():
             expire_time = timedelta(days=10)
             stats_pipeline.expire(f'stats:{today}:errors', expire_time)
             stats_pipeline.expire(f'stats:{today}:retry_failed', expire_time)
+            stats_pipeline.expire(f'stats:{today}:retry_success', expire_time)
             stats_pipeline.expire(f'stats:{today}:captures', expire_time)
             stats_pipeline.execute()
 
     def clear_capture(self, uuid: str, reason: str):
         '''Remove a capture from the list, shouldn't happen unless it is in error'''
+        logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
+        if self.get_capture_status(uuid) in [CaptureStatus.ONGOING, CaptureStatus.QUEUED]:
+            logger.warning('Attempted to clear capture that is still being processed.')
+            return
+        logger.warning(f'Clearing capture: {reason}')
         result = {'error': reason}
         p = self.redis.pipeline()
         to_store = zlib.compress(pickle.dumps(result))
