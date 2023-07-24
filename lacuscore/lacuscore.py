@@ -506,8 +506,8 @@ class LacusCore():
             proxy = to_capture.get('proxy')
             if self.tor_proxy:
                 # check if onion or forced
-                if (proxy == 'force_tor'
-                        or (not proxy
+                if (proxy == 'force_tor'  # if the proxy is set to "force_tor", we use the pre-configured tor proxy, regardless the URL.
+                        or (not proxy  # if the TLD is "onion", we use the pre-configured tor proxy
                             and splitted_url.netloc
                             and splitted_url.hostname
                             and splitted_url.hostname.split('.')[-1] == 'onion')):
@@ -520,18 +520,18 @@ class LacusCore():
                         try:
                             ips_info = socket.getaddrinfo(splitted_url.hostname, None, proto=socket.IPPROTO_TCP)
                         except socket.gaierror:
-                            logger.debug(f'Unable to resolve {splitted_url.hostname}.')
-                            result = {'error': f'Unable to resolve {splitted_url.hostname}.'}
+                            logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Original URL: "{url}".')
+                            result = {'error': f'Unable to resolve "{splitted_url.hostname}" - Original URL: "{url}".'}
                             raise RetryCapture
                         except Exception as e:
-                            result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}.'}
+                            result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Original URL: "{url}".'}
                             raise CaptureError
                         for info in ips_info:
                             if not ipaddress.ip_address(info[-1][0]).is_global:
                                 result = {'error': f'Capturing ressources on private IPs {info[-1][0]} is disabled.'}
                                 raise CaptureError
                 else:
-                    result = {'error': f'Unable to find hostname or IP in the query: {url}.'}
+                    result = {'error': f'Unable to find hostname or IP in the query: "{url}".'}
                     raise CaptureError
 
             browser_engine: BROWSER = "chromium"
