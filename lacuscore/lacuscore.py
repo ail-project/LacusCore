@@ -520,11 +520,11 @@ class LacusCore():
                         try:
                             ips_info = socket.getaddrinfo(splitted_url.hostname, None, proto=socket.IPPROTO_TCP)
                         except socket.gaierror:
-                            logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Original URL: "{url}".')
-                            result = {'error': f'Unable to resolve "{splitted_url.hostname}" - Original URL: "{url}".'}
+                            logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
+                            result = {'error': f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".'}
                             raise RetryCapture
                         except Exception as e:
-                            result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Original URL: "{url}".'}
+                            result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".'}
                             raise CaptureError
                         for info in ips_info:
                             if not ipaddress.ip_address(info[-1][0]).is_global:
