@@ -260,6 +260,8 @@ class LacusCore():
         """
         to_enqueue: CaptureSettings
         if settings:
+            if 'url' in settings and settings['url'] is not None:
+                settings['url'] = settings['url'].strip()
             if settings.get('force') is not None:
                 force = settings.pop('force')  # type: ignore
             if settings.get('recapture_interval') is not None:
@@ -270,7 +272,7 @@ class LacusCore():
         else:
             to_enqueue = {'depth': depth, 'rendered_hostname_only': rendered_hostname_only}
             if url:
-                to_enqueue['url'] = url
+                to_enqueue['url'] = url.strip()
             elif document_name and document:
                 to_enqueue['document_name'] = _secure_filename(document_name)
                 to_enqueue['document'] = document
