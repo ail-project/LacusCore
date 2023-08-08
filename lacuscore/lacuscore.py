@@ -96,6 +96,7 @@ class CaptureResponseJson(TypedDict, total=False):
     downloaded_file: Optional[str]
     children: Optional[List[Any]]
     runtime: Optional[float]
+    potential_favicons: Optional[List[str]]
 
 
 class CaptureSettings(TypedDict, total=False):
@@ -118,6 +119,7 @@ class CaptureSettings(TypedDict, total=False):
     color_scheme: Optional[str]
     viewport: Optional[Dict[str, int]]
     referer: Optional[str]
+    with_favicon: bool
     force: Optional[bool]
     recapture_interval: Optional[int]
     priority: Optional[int]
@@ -197,6 +199,7 @@ class LacusCore():
                 viewport: Optional[Dict[str, int]]=None,
                 referer: Optional[str]=None,
                 rendered_hostname_only: bool=True,
+                with_favicon: bool=False,
                 force: bool=False,
                 recapture_interval: int=300,
                 priority: int=0,
@@ -223,6 +226,7 @@ class LacusCore():
                 viewport: Optional[Dict[str, int]]=None,
                 referer: Optional[str]=None,
                 rendered_hostname_only: bool=True,
+                with_favicon: bool=False,
                 force: bool=False,
                 recapture_interval: int=300,
                 priority: int=0,
@@ -251,6 +255,7 @@ class LacusCore():
         :param viewport: The viewport of the browser used for capturing
         :param referer: The referer URL for the capture
         :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
+        :param with_favicon: If True, PlaywrightCapture will attempt to get the potential favicons for the rendered URL. It is a dirty trick, see this issue for details: https://github.com/Lookyloo/PlaywrightCapture/issues/45
         :param force: Force recapture, even if the same one was already done within the recapture_interval
         :param recapture_interval: The time the enqueued settings are kept in memory to avoid duplicates
         :param priority: The priority of the capture
@@ -304,6 +309,8 @@ class LacusCore():
                 to_enqueue['viewport'] = viewport
             if referer:
                 to_enqueue['referer'] = referer
+            if with_favicon:
+                to_enqueue['with_favicon'] = with_favicon
 
         hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
         if not force:
@@ -348,6 +355,9 @@ class LacusCore():
         if capture.get('children') and capture['children']:
             for child in capture['children']:
                 child = self._encode_response(child)
+        if capture.get('potential_favicons') and capture['potential_favicons'] is not None:
+            encoded_favicons = [b64encode(favicon).decode() for favicon in capture['potential_favicons']]
+            encoded_capture['potential_favicons'] = encoded_favicons
         return encoded_capture
 
     @overload
@@ -436,7 +446,7 @@ class LacusCore():
                             'document', 'browser', 'device_name', 'user_agent', 'proxy',
                             'general_timeout_in_sec', 'cookies', 'headers', 'http_credentials',
                             'viewport', 'referer', 'geolocation', 'timezone_id', 'locale',
-                            'color_scheme']
+                            'color_scheme', 'with_favicon']
             result: CaptureResponse = {}
             to_capture: CaptureSettings = {}
             document_as_bytes = b''
@@ -461,7 +471,7 @@ class LacusCore():
                     elif k in ['general_timeout_in_sec', 'depth']:
                         # int
                         to_capture[k] = int(v)  # type: ignore
-                    elif k in ['rendered_hostname_only']:
+                    elif k in ['rendered_hostname_only', 'with_favicon']:
                         # bool
                         to_capture[k] = bool(int(v))  # type: ignore
                     elif k == 'document':
@@ -577,6 +587,7 @@ class LacusCore():
                             url, referer=to_capture.get('referer'),
                             depth=to_capture.get('depth', 0),
                             rendered_hostname_only=to_capture.get('rendered_hostname_only', True),
+                            with_favicon=to_capture.get('with_favicon', False),
                             max_depth_capture_time=self.max_capture_time),
                         timeout=self.max_capture_time)
                     if 'error' in playwright_result and 'error_name' in playwright_result:
