@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lacuscore"
-version = "1.6.5"
+version = "1.6.6"
 description = "Core of Lacus, usable as a module"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
@@ -42,7 +42,7 @@ docs = ["Sphinx"]
 
 [tool.poetry.group.dev.dependencies]
 types-redis = {version = "^4.6.0.3"}
-mypy = "^1.4.1"
+mypy = "^1.5.0"
 types-requests = "^2.31.0.2"
 types-beautifulsoup4 = "^4.12.0.5"
 ipython = [
