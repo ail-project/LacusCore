@@ -355,9 +355,11 @@ class LacusCore():
         if capture.get('children') and capture['children']:
             for child in capture['children']:
                 child = self._encode_response(child)
-        if capture.get('potential_favicons') and capture['potential_favicons'] is not None:
-            encoded_favicons = [b64encode(favicon).decode() for favicon in capture['potential_favicons']]
-            encoded_capture['potential_favicons'] = encoded_favicons
+
+        # A set cannot be dumped in json, it must be turned into a list. If it is empty, we need to remove it.
+        if 'potential_favicons' in capture:
+            if potential_favicons := capture.pop('potential_favicons'):
+                encoded_capture['potential_favicons'] = [b64encode(favicon).decode() for favicon in potential_favicons]
         return encoded_capture
 
     @overload
