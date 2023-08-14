@@ -10,7 +10,6 @@ import pickle
 import random
 import re
 import socket
-import sys
 import time
 import unicodedata
 import zlib
@@ -78,6 +77,9 @@ class CaptureStatus(IntEnum):
 class CaptureResponse(PlaywrightCaptureResponse, TypedDict, total=False):
     '''A capture made by Lacus. With the base64 encoded image and downloaded file decoded to bytes.'''
 
+    # Need to make sure the type is what's expected down the line
+    children: Optional[List['CaptureResponse']]  # type: ignore
+
     status: int
     runtime: Optional[float]
 
@@ -94,7 +96,7 @@ class CaptureResponseJson(TypedDict, total=False):
     png: Optional[str]
     downloaded_filename: Optional[str]
     downloaded_file: Optional[str]
-    children: Optional[List[Any]]
+    children: Optional[List['CaptureResponseJson']]
     runtime: Optional[float]
     potential_favicons: Optional[List[str]]
 
@@ -353,8 +355,7 @@ class LacusCore():
         if capture.get('downloaded_file') is not None and capture['downloaded_file'] is not None:  # the second part is not needed, but makes mypy happy
             encoded_capture['downloaded_file'] = b64encode(capture['downloaded_file']).decode()
         if capture.get('children') and capture['children']:
-            for child in capture['children']:
-                child = self._encode_response(child)
+            encoded_capture['children'] = [self._encode_response(child) for child in capture['children']]
 
         # A set cannot be dumped in json, it must be turned into a list. If it is empty, we need to remove it.
         if 'potential_favicons' in capture:
@@ -383,10 +384,9 @@ class LacusCore():
             to_return['status'] = CaptureStatus.QUEUED
         elif self.redis.zscore('lacus:ongoing', uuid) is not None:
             to_return['status'] = CaptureStatus.ONGOING
-        elif response := self.redis.get(f'lacus:capture_results:{uuid}'):
+        elif response := self._get_capture_response(uuid):
             to_return['status'] = CaptureStatus.DONE
-            response_json = pickle.loads(zlib.decompress(response))
-            to_return.update(response_json)
+            to_return.update(response)
             if decode:
                 return to_return
             return self._encode_response(to_return)
@@ -403,7 +403,10 @@ class LacusCore():
             return CaptureStatus.QUEUED
         elif self.redis.zscore('lacus:ongoing', uuid) is not None:
             return CaptureStatus.ONGOING
+        elif self.redis.exists(f'lacus:capture_results_hash:{uuid}'):
+            return CaptureStatus.DONE
         elif self.redis.exists(f'lacus:capture_results:{uuid}'):
+            # TODO: remove in 1.8.* - old format used last in 1.6, and kept no more than 10H in redis
             return CaptureStatus.DONE
         return CaptureStatus.UNKNOWN
 
@@ -677,18 +680,17 @@ class LacusCore():
                 p.zadd('lacus:to_capture', {uuid: priority - 1})
                 p.execute()
             else:
-                to_store = zlib.compress(pickle.dumps(result))
                 retry_redis_error = 3
                 while retry_redis_error > 0:
                     try:
                         p = self.redis.pipeline()
-                        p.setex(f'lacus:capture_results:{uuid}', 36000, to_store)
+                        self._store_capture_response(p, uuid, result)
                         p.delete(f'lacus:capture_settings:{uuid}')
                         p.zrem('lacus:ongoing', uuid)
                         p.execute()
                         break
                     except RedisConnectionError as e:
-                        logger.warning(f'Unable to store capture result (size: {sys.getsizeof(to_store)} - Redis Connection Error: {e}')
+                        logger.warning(f'Unable to store capture result - Redis Connection Error: {e}')
                         retry_redis_error -= 1
                         await asyncio.sleep(random.randint(5, 10))
                 else:
@@ -704,6 +706,77 @@ class LacusCore():
             stats_pipeline.expire(f'stats:{today}:captures', expire_time)
             stats_pipeline.execute()
 
+    def _store_capture_response(self, pipeline: Redis, capture_uuid: str, results: CaptureResponse,
+                                root_key: Optional[str]=None) -> None:
+        if root_key is None:
+            root_key = f'lacus:capture_results_hash:{capture_uuid}'
+
+        hash_to_set = {}
+        if results.get('har'):
+            hash_to_set['har'] = pickle.dumps(results['har'])
+        if results.get('cookies'):
+            hash_to_set['cookies'] = pickle.dumps(results['cookies'])
+        if results.get('potential_favicons'):
+            hash_to_set['potential_favicons'] = pickle.dumps(results['potential_favicons'])
+        if 'children' in results and results['children'] is not None:
+            padding_length = len(str(len(results['children'])))
+            children = set()
+            for i, child in enumerate(results['children']):
+                self._store_capture_response(pipeline, capture_uuid, child, f'{root_key}_{i:{padding_length}}')
+                children.add(f'{root_key}_{i}')
+            hash_to_set['children'] = pickle.dumps(children)
+
+        for key in results.keys():
+            # these entries can be stored directly
+            if key in ['har', 'cookies', 'potential_favicons', 'children'] or not results.get(key):
+                continue
+            hash_to_set[key] = results[key]  # type: ignore
+        pipeline.hset(root_key, mapping=hash_to_set)  # type: ignore
+        # Make sure the key expires
+        pipeline.expire(root_key, 36000)
+
+    def _get_capture_response(self, capture_uuid: str, root_key: Optional[str]=None) -> Optional[CaptureResponse]:
+        logger = LacusCoreLogAdapter(self.master_logger, {'uuid': capture_uuid})
+        if root_key is None:
+            root_key = f'lacus:capture_results_hash:{capture_uuid}'
+
+            if not self.redis.exists(root_key):
+                if old_response := self.redis.get(f'lacus:capture_results:{capture_uuid}'):
+                    # TODO: remove in 1.8.* - old format used last in 1.6, and kept no more than 10H in redis
+                    return pickle.loads(zlib.decompress(old_response))
+                return None
+
+        # New format and capture done
+
+        to_return: CaptureResponse = {}
+        for key, value in self.redis.hgetall(root_key).items():
+            if key == b'har':
+                to_return['har'] = pickle.loads(value)
+            elif key == b'cookies':
+                to_return['cookies'] = pickle.loads(value)
+            elif key == b'potential_favicons':
+                to_return['potential_favicons'] = pickle.loads(value)
+            elif key == b'children':
+                to_return['children'] = []
+                for child_root_key in sorted(pickle.loads(value)):
+                    child = self._get_capture_response(capture_uuid, child_root_key)
+                    to_return['children'].append(child)  # type: ignore
+            elif key in [b'status']:
+                # The value in an int
+                to_return[key.decode()] = int(value)  # type: ignore
+            elif key in [b'runtime']:
+                # The value is a float
+                to_return[key.decode()] = float(value)  # type: ignore
+            elif key in [b'last_redirected_url', b'error', b'error_name', b'html', b'downloaded_filename']:
+                # the value is a string
+                to_return[key.decode()] = value.decode()  # type: ignore
+            elif key in [b'png', b'downloaded_file']:
+                # the value is bytes
+                to_return[key.decode()] = value  # type: ignore
+            else:
+                logger.critical(f'Unexpected key in response: {key} - {value}')
+        return to_return
+
     def clear_capture(self, uuid: str, reason: str):
         '''Remove a capture from the list, shouldn't happen unless it is in error'''
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
@@ -711,10 +784,9 @@ class LacusCore():
             logger.warning('Attempted to clear capture that is still being processed.')
             return
         logger.warning(f'Clearing capture: {reason}')
-        result = {'error': reason}
+        result: CaptureResponse = {'error': reason}
         p = self.redis.pipeline()
-        to_store = zlib.compress(pickle.dumps(result))
-        p.setex(f'lacus:capture_results:{uuid}', 36000, to_store)
+        self._store_capture_response(p, uuid, result)
         p.delete(f'lacus:capture_settings:{uuid}')
         p.zrem('lacus:ongoing', uuid)
         p.execute()
