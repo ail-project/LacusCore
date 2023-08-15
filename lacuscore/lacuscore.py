@@ -679,7 +679,10 @@ class LacusCore():
                 while retry_redis_error > 0:
                     try:
                         p = self.redis.pipeline()
-                        self._store_capture_response(p, uuid, result)
+                        if result:
+                            self._store_capture_response(p, uuid, result)
+                        else:
+                            logger.warning('Got no result at all for the capture.')
                         p.delete(f'lacus:capture_settings:{uuid}')
                         p.zrem('lacus:ongoing', uuid)
                         p.execute()
@@ -703,6 +706,7 @@ class LacusCore():
 
     def _store_capture_response(self, pipeline: Redis, capture_uuid: str, results: CaptureResponse,
                                 root_key: Optional[str]=None) -> None:
+        logger = LacusCoreLogAdapter(self.master_logger, {'uuid': capture_uuid})
         if root_key is None:
             root_key = f'lacus:capture_results_hash:{capture_uuid}'
 
@@ -718,6 +722,10 @@ class LacusCore():
             children = set()
             for i, child in enumerate(results['children']):
                 child_key = f'{root_key}_{i:0{padding_length}}'
+                if not child:
+                    # the child key is empty
+                    logger.warning(f'The response for {child_key} is empty.')
+                    continue
                 self._store_capture_response(pipeline, capture_uuid, child, child_key)
                 children.add(child_key)
             hash_to_set['children'] = pickle.dumps(children)
@@ -727,9 +735,13 @@ class LacusCore():
                 continue
             # these entries can be stored directly
             hash_to_set[key] = results[key]  # type: ignore
-        pipeline.hset(root_key, mapping=hash_to_set)  # type: ignore
-        # Make sure the key expires
-        pipeline.expire(root_key, 36000)
+
+        if hash_to_set:
+            pipeline.hset(root_key, mapping=hash_to_set)  # type: ignore
+            # Make sure the key expires
+            pipeline.expire(root_key, 36000)
+        else:
+            logger.critical(f'Nothing to store (Hash: {hash_to_set}) for {root_key}')
 
     def _get_capture_response(self, capture_uuid: str, root_key: Optional[str]=None) -> Optional[CaptureResponse]:
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': capture_uuid})
