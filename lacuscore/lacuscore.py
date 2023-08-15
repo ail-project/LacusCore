@@ -141,11 +141,6 @@ class LacusCoreLogAdapter(LoggerAdapter):
         return msg, kwargs
 
 
-def _json_encode(obj: Union[bytes]) -> str:
-    if isinstance(obj, bytes):
-        return b64encode(obj).decode()
-
-
 class LacusCore():
     """Capture URLs or web enabled documents using PlaywrightCapture.
 
@@ -170,7 +165,7 @@ class LacusCore():
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
 
-        # NOTE: clear old ongoing captures queue in case of need
+        # NOTE: Remove in 1.8.* - clear old ongoing captures queue in case of need
         if self.redis.type('lacus:ongoing') in ['set', b'set']:
             self.redis.delete('lacus:ongoing')
 
@@ -722,14 +717,15 @@ class LacusCore():
             padding_length = len(str(len(results['children'])))
             children = set()
             for i, child in enumerate(results['children']):
-                self._store_capture_response(pipeline, capture_uuid, child, f'{root_key}_{i:{padding_length}}')
-                children.add(f'{root_key}_{i}')
+                child_key = f'{root_key}_{i:0{padding_length}}'
+                self._store_capture_response(pipeline, capture_uuid, child, child_key)
+                children.add(child_key)
             hash_to_set['children'] = pickle.dumps(children)
 
         for key in results.keys():
-            # these entries can be stored directly
             if key in ['har', 'cookies', 'potential_favicons', 'children'] or not results.get(key):
                 continue
+            # these entries can be stored directly
             hash_to_set[key] = results[key]  # type: ignore
         pipeline.hset(root_key, mapping=hash_to_set)  # type: ignore
         # Make sure the key expires
