@@ -767,8 +767,8 @@ class LacusCore():
             elif key == b'children':
                 to_return['children'] = []
                 for child_root_key in sorted(pickle.loads(value)):
-                    child = self._get_capture_response(capture_uuid, child_root_key)
-                    to_return['children'].append(child)  # type: ignore
+                    if child := self._get_capture_response(capture_uuid, child_root_key):
+                        to_return['children'].append(child)  # type: ignore
             elif key in [b'status']:
                 # The value in an int
                 to_return[key.decode()] = int(value)  # type: ignore
