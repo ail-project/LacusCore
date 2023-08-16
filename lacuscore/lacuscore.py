@@ -590,10 +590,11 @@ class LacusCore():
                             with_favicon=to_capture.get('with_favicon', False),
                             max_depth_capture_time=self.max_capture_time),
                         timeout=self.max_capture_time)
-                    if 'error' in playwright_result and 'error_name' in playwright_result:
+                    result = cast(CaptureResponse, playwright_result)
+                    if 'error' in result and 'error_name' in result:
                         # generate stats
-                        if playwright_result['error_name'] is not None:
-                            stats_pipeline.zincrby(f'stats:{today}:errors', 1, playwright_result['error_name'])
+                        if result['error_name'] is not None:
+                            stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
             except PlaywrightCaptureException as e:
                 logger.exception(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': f'Invalid parameters for the capture of {url} - {e}'}
@@ -651,7 +652,6 @@ class LacusCore():
             result = {'error': msg}
             logger.exception(msg)
         else:
-            result = cast(CaptureResponse, playwright_result)
             if start_time := self.redis.zscore('lacus:ongoing', uuid):
                 runtime = time.time() - start_time
                 logger.info(f'Capture of {url} finished - Runtime: {runtime}s')
