@@ -31,7 +31,10 @@ include = ['README.md']
 [tool.poetry.dependencies]
 python = "^3.8"
 requests = "^2.31.0"
-Sphinx = { version = "^7.1.2", optional = true }
+Sphinx = [
+   {version = "<7.2", python = "<3.9", optional = true},
+   {version = "^7.2", python = ">=3.9", optional = true}
+]
 playwrightcapture = {extras = ["recaptcha"], version = "^1.21.6"}
 defang = "^0.5.3"
 ua-parser = "^0.18.0"
@@ -42,7 +45,7 @@ docs = ["Sphinx"]
 
 [tool.poetry.group.dev.dependencies]
 types-redis = {version = "^4.6.0.4"}
-mypy = "^1.5.0"
+mypy = "^1.5.1"
 types-requests = "^2.31.0.2"
 types-beautifulsoup4 = "^4.12.0.6"
 ipython = [
