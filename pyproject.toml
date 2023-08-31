@@ -35,7 +35,7 @@ Sphinx = [
    {version = "<7.2", python = "<3.9", optional = true},
    {version = "^7.2", python = ">=3.9", optional = true}
 ]
-playwrightcapture = {extras = ["recaptcha"], version = "^1.21.6"}
+playwrightcapture = {extras = ["recaptcha"], version = "^1.21.7"}
 defang = "^0.5.3"
 ua-parser = "^0.18.0"
 redis = {version = "^4.6.0", extras = ["hiredis"]}
@@ -44,7 +44,7 @@ redis = {version = "^4.6.0", extras = ["hiredis"]}
 docs = ["Sphinx"]
 
 [tool.poetry.group.dev.dependencies]
-types-redis = {version = "^4.6.0.4"}
+types-redis = {version = "^4.6.0.5"}
 mypy = "^1.5.1"
 types-requests = "^2.31.0.2"
 types-beautifulsoup4 = "^4.12.0.6"

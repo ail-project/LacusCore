@@ -145,7 +145,7 @@ class LacusCore():
     """Capture URLs or web enabled documents using PlaywrightCapture.
 
     :param redis_connector: Pre-configured connector to a redis instance.
-    :param max_capture time: If the capture takes more than that time, break
+    :param max_capture time: If the capture takes more than that time, break (in seconds)
     :param tor_proxy: URL to a SOCKS 5 tor proxy. If you have tor installed, this is the default: socks5://127.0.0.1:9050.
     :param only_global_lookups: Discard captures that point to non-public IPs.
     :param max_retries: How many times should we re-try a capture if it failed.
