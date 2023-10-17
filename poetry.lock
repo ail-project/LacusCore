@@ -1075,13 +1075,13 @@ typing-extensions = {version = "*", markers = "python_version <= \"3.8\""}
 
 [[package]]
 name = "playwrightcapture"
-version = "1.21.11"
+version = "1.22.0"
 description = "A simple library to capture websites using playwright"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "playwrightcapture-1.21.11-py3-none-any.whl", hash = "sha256:14ded3618b5e3329b45265205d8e8b82367d332b91a201ba16dae77decf019de"},
-    {file = "playwrightcapture-1.21.11.tar.gz", hash = "sha256:4f6b9b795034fad3b06a30d43f72be937b80b53d541bf45c6ab630be911421a7"},
+    {file = "playwrightcapture-1.22.0-py3-none-any.whl", hash = "sha256:f1befbba15ae084fd7e60ecac6a27c030da5f70fdcafa58cfbfcb53f9c5fa4b0"},
+    {file = "playwrightcapture-1.22.0.tar.gz", hash = "sha256:a3023651e8ce0136c003ec840fe88f4f67bcb59388c9727fc010100c46b81866"},
 ]
 
 [package.dependencies]
@@ -1799,13 +1799,13 @@ types-pyOpenSSL = "*"
 
 [[package]]
 name = "types-requests"
-version = "2.31.0.8"
+version = "2.31.0.9"
 description = "Typing stubs for requests"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "types-requests-2.31.0.8.tar.gz", hash = "sha256:e1b325c687b3494a2f528ab06e411d7092cc546cc9245c000bacc2fca5ae96d4"},
-    {file = "types_requests-2.31.0.8-py3-none-any.whl", hash = "sha256:39894cbca3fb3d032ed8bdd02275b4273471aa5668564617cc1734b0a65ffdf8"},
+    {file = "types-requests-2.31.0.9.tar.gz", hash = "sha256:3bb11188795cc3aa39f9635032044ee771009370fb31c3a06ae952b267b6fcd7"},
+    {file = "types_requests-2.31.0.9-py3-none-any.whl", hash = "sha256:140e323da742a0cd0ff0a5a83669da9ffcebfaeb855d367186b2ec3985ba2742"},
 ]
 
 [package.dependencies]
@@ -1922,4 +1922,4 @@ docs = ["Sphinx", "Sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "cd51b13c13f8ac409c73b82404643857dedd421ae74afd08216b47d11fa86f09"
+content-hash = "8ee16072ef460c51076824c04385086546c4c83b2695799ee56037f4b728c978"
