@@ -421,9 +421,7 @@ class LacusCore():
             max_consume -= 1
             uuid: str = value[0][0].decode()
             priority: int = int(value[0][1])
-            capture = asyncio.create_task(self._capture(uuid, priority))
-            capture.set_name(uuid)
-            yield capture
+            yield asyncio.create_task(self._capture(uuid, priority), name=uuid)
 
     async def _capture(self, uuid: str, priority: int):
         """Trigger a specific capture
@@ -433,6 +431,7 @@ class LacusCore():
         """
         if self.redis.zscore('lacus:ongoing', uuid) is not None:
             # the capture is ongoing
+            await asyncio.sleep(1)
             return
 
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
