@@ -30,7 +30,7 @@ class LacusCoreMonitoring():
     def get_capture_result_size(self, uuid: str) -> Optional[str]:
         return self.redis.memory_usage(f'lacus:capture_results:{uuid}')
 
-    def get_stats(self, d: Optional[Union[datetime, date, str]]=None, /):
+    def get_stats(self, d: Optional[Union[datetime, date, str]]=None, /, *, cardinality_only: bool=False) -> Dict[str, Any]:
         if d is None:
             _date = date.today().isoformat()
         elif isinstance(d, str):
@@ -44,10 +44,18 @@ class LacusCoreMonitoring():
         to_return: Dict[str, Any] = {}
         if errors := self.redis.zrevrangebyscore(f'stats:{_date}:errors', '+Inf', 0, withscores=True):
             to_return['errors'] = errors
-        if retry_failed := self.redis.smembers(f'stats:{_date}:retry_failed'):
-            to_return['retry_failed'] = retry_failed
-        if retry_success := self.redis.smembers(f'stats:{_date}:retry_success'):
-            to_return['retry_success'] = retry_success
-        if captures := self.redis.smembers(f'stats:{_date}:captures'):
-            to_return['captures'] = captures
+        if cardinality_only:
+            if retry_failed := self.redis.scard(f'stats:{_date}:retry_failed'):
+                to_return['retry_failed'] = retry_failed
+            if retry_success := self.redis.scard(f'stats:{_date}:retry_success'):
+                to_return['retry_success'] = retry_success
+            if captures := self.redis.scard(f'stats:{_date}:captures'):
+                to_return['captures'] = captures
+        else:
+            if retry_failed := self.redis.smembers(f'stats:{_date}:retry_failed'):
+                to_return['retry_failed'] = retry_failed
+            if retry_success := self.redis.smembers(f'stats:{_date}:retry_success'):
+                to_return['retry_success'] = retry_success
+            if captures := self.redis.smembers(f'stats:{_date}:captures'):
+                to_return['captures'] = captures
         return to_return
