@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import List, Tuple, Dict, Optional, Union, Any
+from typing import List, Tuple, Dict, Optional, Union, Any, Set
 
 from datetime import datetime, date
 
@@ -41,7 +41,7 @@ class LacusCoreMonitoring():
             _date = d.isoformat()
         else:
             raise Exception('Invalid type for date ({type(d)})')
-        to_return: Dict[str, Any] = {}
+        to_return: Dict[str, Union[List[Tuple[str, float]], int, Set[str]]] = {}
         if errors := self.redis.zrevrangebyscore(f'stats:{_date}:errors', '+Inf', 0, withscores=True):
             to_return['errors'] = errors
         if cardinality_only:
@@ -52,10 +52,10 @@ class LacusCoreMonitoring():
             if captures := self.redis.scard(f'stats:{_date}:captures'):
                 to_return['captures'] = captures
         else:
-            if retry_failed := self.redis.smembers(f'stats:{_date}:retry_failed'):
-                to_return['retry_failed'] = retry_failed
-            if retry_success := self.redis.smembers(f'stats:{_date}:retry_success'):
-                to_return['retry_success'] = retry_success
-            if captures := self.redis.smembers(f'stats:{_date}:captures'):
-                to_return['captures'] = captures
+            if retry_failed_list := self.redis.smembers(f'stats:{_date}:retry_failed'):
+                to_return['retry_failed'] = retry_failed_list
+            if retry_success_list := self.redis.smembers(f'stats:{_date}:retry_success'):
+                to_return['retry_success'] = retry_success_list
+            if captures_list := self.redis.smembers(f'stats:{_date}:captures'):
+                to_return['captures'] = captures_list
         return to_return
