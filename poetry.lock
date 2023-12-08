@@ -1089,13 +1089,13 @@ test = ["pytest"]
 
 [[package]]
 name = "playwrightcapture"
-version = "1.22.3"
+version = "1.22.4"
 description = "A simple library to capture websites using playwright"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "playwrightcapture-1.22.3-py3-none-any.whl", hash = "sha256:9105fb540080726ec9ffd2a132a6a321e5c9b6fb94b16907c0d27c98b1e8dcf5"},
-    {file = "playwrightcapture-1.22.3.tar.gz", hash = "sha256:a7176a113b4327a591f24a7f07ad9e0d9fa751dca46449f1dfdf9968fe692585"},
+    {file = "playwrightcapture-1.22.4-py3-none-any.whl", hash = "sha256:517622d1a691cb6069974fa70edac2224fb4d801fd49391236d26ed0e43a35b4"},
+    {file = "playwrightcapture-1.22.4.tar.gz", hash = "sha256:4ba6489af19a7eff5656f03ab6061b57a5c347724fe4c97adb75bc87a74630f0"},
 ]
 
 [package.dependencies]
@@ -1107,12 +1107,12 @@ pydub = {version = ">=0.25.1,<0.26.0", optional = true, markers = "extra == \"re
 pytz = {version = ">=2023.3.post1,<2024.0", markers = "python_version < \"3.9\""}
 requests = {version = ">=2.31.0,<3.0.0", extras = ["socks"], optional = true, markers = "extra == \"recaptcha\""}
 setuptools = ">=69.0.2,<70.0.0"
-SpeechRecognition = {version = ">=3.10.0,<4.0.0", optional = true, markers = "extra == \"recaptcha\""}
+SpeechRecognition = {version = ">=3.10.1,<4.0.0", optional = true, markers = "extra == \"recaptcha\""}
 tzdata = ">=2023.3,<2024.0"
 w3lib = ">=2.1.2,<3.0.0"
 
 [package.extras]
-recaptcha = ["SpeechRecognition (>=3.10.0,<4.0.0)", "pydub (>=0.25.1,<0.26.0)", "requests[socks] (>=2.31.0,<3.0.0)"]
+recaptcha = ["SpeechRecognition (>=3.10.1,<4.0.0)", "pydub (>=0.25.1,<0.26.0)", "requests[socks] (>=2.31.0,<3.0.0)"]
 
 [[package]]
 name = "pluggy"
@@ -1958,4 +1958,4 @@ docs = ["Sphinx", "Sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "def153277695ca01eff0e28d61635d377a9499744ce97d1ecdf449f104527b59"
+content-hash = "d9a483a32c2550733c96cc2f3af61b8e3d113324097294530b09a44eec68b3ef"
