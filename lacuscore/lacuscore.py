@@ -792,8 +792,16 @@ class LacusCore():
     def clear_capture(self, uuid: str, reason: str):
         '''Remove a capture from the list, shouldn't happen unless it is in error'''
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
-        if self.get_capture_status(uuid) in [CaptureStatus.ONGOING, CaptureStatus.QUEUED]:
-            logger.warning('Attempted to clear capture that is still being processed.')
+        capture_status = self.get_capture_status(uuid)
+        if capture_status == CaptureStatus.ONGOING:
+            # Check when it was started.
+            start_time = self.redis.zscore('lacus:ongoing', uuid)
+            if start_time > time.time() - self.max_capture_time * 1.1:
+                # The capture started recently, wait before clearing it.
+                logger.warning('The capture is (probably) still going, not clearing.')
+                return
+        elif capture_status == CaptureStatus.QUEUED:
+            logger.warning('The capture is queued, not clearing.')
             return
         logger.warning(f'Clearing capture: {reason}')
         result: CaptureResponse = {'error': reason}
