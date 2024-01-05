@@ -30,6 +30,7 @@ from playwrightcapture import Capture, PlaywrightCaptureException
 from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
 from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import DataError
 from ua_parser import user_agent_parser  # type: ignore
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
@@ -340,7 +341,11 @@ class LacusCore():
         p.set(f'lacus:query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
         p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=mapping_capture)  # type: ignore
         p.zadd('lacus:to_capture', {perma_uuid: priority})
-        p.execute()
+        try:
+            p.execute()
+        except DataError:
+            self.master_logger.exception(f'Unable to enqueue: {mapping_capture}')
+            raise LacusCoreException(f'Unable to enqueue: {mapping_capture}')
         return perma_uuid
 
     def _encode_response(self, capture: CaptureResponse) -> CaptureResponseJson:
