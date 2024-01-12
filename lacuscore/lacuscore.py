@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+
 import asyncio
 import ipaddress
 import hashlib
@@ -79,66 +81,66 @@ class CaptureResponse(PlaywrightCaptureResponse, TypedDict, total=False):
     '''A capture made by Lacus. With the base64 encoded image and downloaded file decoded to bytes.'''
 
     # Need to make sure the type is what's expected down the line
-    children: Optional[List['CaptureResponse']]  # type: ignore
+    children: list[CaptureResponse] | None  # type: ignore
 
     status: int
-    runtime: Optional[float]
+    runtime: float | None
 
 
 class CaptureResponseJson(TypedDict, total=False):
     '''A capture made by Lacus. With the base64 encoded image and downloaded file *not* decoded.'''
 
     status: int
-    last_redirected_url: Optional[str]
-    har: Optional[Dict[str, Any]]
-    cookies: Optional[List[Dict[str, str]]]
-    error: Optional[str]
-    html: Optional[str]
-    png: Optional[str]
-    downloaded_filename: Optional[str]
-    downloaded_file: Optional[str]
-    children: Optional[List['CaptureResponseJson']]
-    runtime: Optional[float]
-    potential_favicons: Optional[List[str]]
+    last_redirected_url: str | None
+    har: dict[str, Any] | None
+    cookies: list[dict[str, str]] | None
+    error: str | None
+    html: str | None
+    png: str | None
+    downloaded_filename: str | None
+    downloaded_file: str | None
+    children: list[CaptureResponseJson] | None
+    runtime: float | None
+    potential_favicons: list[str] | None
 
 
 class CaptureSettings(TypedDict, total=False):
     '''The capture settings that can be passed to Lacus.'''
 
-    url: Optional[str]
-    document_name: Optional[str]
-    document: Optional[str]
-    browser: Optional[str]
-    device_name: Optional[str]
-    user_agent: Optional[str]
-    proxy: Optional[Union[str, Dict[str, str]]]
-    general_timeout_in_sec: Optional[int]
-    cookies: Optional[List[Dict[str, Any]]]
-    headers: Optional[Union[str, Dict[str, str]]]
-    http_credentials: Optional[Dict[str, str]]
-    geolocation: Optional[Dict[str, float]]
-    timezone_id: Optional[str]
-    locale: Optional[str]
-    color_scheme: Optional[str]
-    viewport: Optional[Dict[str, int]]
-    referer: Optional[str]
+    url: str | None
+    document_name: str | None
+    document: str | None
+    browser: str | None
+    device_name: str | None
+    user_agent: str | None
+    proxy: str | dict[str, str] | None
+    general_timeout_in_sec: int | None
+    cookies: list[dict[str, Any]] | None
+    headers: str | dict[str, str] | None
+    http_credentials: dict[str, str] | None
+    geolocation: dict[str, float] | None
+    timezone_id: str | None
+    locale: str | None
+    color_scheme: str | None
+    viewport: dict[str, int] | None
+    referer: str | None
     with_favicon: bool
-    force: Optional[bool]
-    recapture_interval: Optional[int]
-    priority: Optional[int]
-    uuid: Optional[str]
+    force: bool | None
+    recapture_interval: int | None
+    priority: int | None
+    uuid: str | None
 
     depth: int
     rendered_hostname_only: bool  # Note: only used if depth is > 0
 
 
-class LacusCoreLogAdapter(LoggerAdapter):
+class LacusCoreLogAdapter(LoggerAdapter):  # type: ignore[type-arg]
     """
     Prepend log entry with the UUID of the capture
     """
-    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> Tuple[str, MutableMapping[str, Any]]:
+    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
         if self.extra:
-            return '[%s] %s' % (self.extra['uuid'], msg), kwargs
+            return '[{}] {}'.format(self.extra['uuid'], msg), kwargs
         return msg, kwargs
 
 
@@ -152,9 +154,9 @@ class LacusCore():
     :param max_retries: How many times should we re-try a capture if it failed.
     """
 
-    def __init__(self, redis_connector: Redis, /, *,
+    def __init__(self, redis_connector: Redis, /, *,  # type: ignore[type-arg]
                  max_capture_time: int=3600,
-                 tor_proxy: Optional[str]=None,
+                 tor_proxy: str | None=None,
                  only_global_lookups: bool=True,
                  max_retries: int=3,
                  loglevel: str='INFO') -> None:
@@ -167,7 +169,7 @@ class LacusCore():
         self.max_retries = max_retries
 
         # NOTE: Remove in 1.8.* - clear old ongoing captures queue in case of need
-        if self.redis.type('lacus:ongoing') in ['set', b'set']:
+        if self.redis.type('lacus:ongoing') in ['set', b'set']:  # type: ignore[no-untyped-call]
             self.redis.delete('lacus:ongoing')
 
     def check_redis_up(self) -> bool:
@@ -175,60 +177,60 @@ class LacusCore():
         return bool(self.redis.ping())
 
     @overload
-    def enqueue(self, *, settings: Optional[CaptureSettings]=None) -> str:
+    def enqueue(self, *, settings: CaptureSettings | None=None) -> str:
         ...
 
     @overload
     def enqueue(self, *,
-                url: Optional[str]=None,
-                document_name: Optional[str]=None, document: Optional[str]=None,
+                url: str | None=None,
+                document_name: str | None=None, document: str | None=None,
                 depth: int=0,
-                browser: Optional[BROWSER]=None, device_name: Optional[str]=None,
-                user_agent: Optional[str]=None,
-                proxy: Optional[Union[str, Dict[str, str]]]=None,
-                general_timeout_in_sec: Optional[int]=None,
-                cookies: Optional[List[Dict[str, Any]]]=None,
-                headers: Optional[Union[str, Dict[str, str]]]=None,
-                http_credentials: Optional[Dict[str, str]]=None,
-                geolocation: Optional[Dict[str, float]]=None,
-                timezone_id: Optional[str]=None,
-                locale: Optional[str]=None,
-                color_scheme: Optional[str]=None,
-                viewport: Optional[Dict[str, int]]=None,
-                referer: Optional[str]=None,
+                browser: BROWSER | None=None, device_name: str | None=None,
+                user_agent: str | None=None,
+                proxy: str | dict[str, str] | None=None,
+                general_timeout_in_sec: int | None=None,
+                cookies: list[dict[str, Any]] | None=None,
+                headers: str | dict[str, str] | None=None,
+                http_credentials: dict[str, str] | None=None,
+                geolocation: dict[str, float] | None=None,
+                timezone_id: str | None=None,
+                locale: str | None=None,
+                color_scheme: str | None=None,
+                viewport: dict[str, int] | None=None,
+                referer: str | None=None,
                 rendered_hostname_only: bool=True,
                 with_favicon: bool=False,
                 force: bool=False,
                 recapture_interval: int=300,
                 priority: int=0,
-                uuid: Optional[str]=None
+                uuid: str | None=None
                 ) -> str:
         ...
 
     def enqueue(self, *,
-                settings: Optional[CaptureSettings]=None,
-                url: Optional[str]=None,
-                document_name: Optional[str]=None, document: Optional[str]=None,
+                settings: CaptureSettings | None=None,
+                url: str | None=None,
+                document_name: str | None=None, document: str | None=None,
                 depth: int=0,
-                browser: Optional[BROWSER]=None, device_name: Optional[str]=None,
-                user_agent: Optional[str]=None,
-                proxy: Optional[Union[str, Dict[str, str]]]=None,
-                general_timeout_in_sec: Optional[int]=None,
-                cookies: Optional[List[Dict[str, Any]]]=None,
-                headers: Optional[Union[str, Dict[str, str]]]=None,
-                http_credentials: Optional[Dict[str, str]]=None,
-                geolocation: Optional[Dict[str, float]]=None,
-                timezone_id: Optional[str]=None,
-                locale: Optional[str]=None,
-                color_scheme: Optional[str]=None,
-                viewport: Optional[Dict[str, int]]=None,
-                referer: Optional[str]=None,
+                browser: BROWSER | None=None, device_name: str | None=None,
+                user_agent: str | None=None,
+                proxy: str | dict[str, str] | None=None,
+                general_timeout_in_sec: int | None=None,
+                cookies: list[dict[str, Any]] | None=None,
+                headers: str | dict[str, str] | None=None,
+                http_credentials: dict[str, str] | None=None,
+                geolocation: dict[str, float] | None=None,
+                timezone_id: str | None=None,
+                locale: str | None=None,
+                color_scheme: str | None=None,
+                viewport: dict[str, int] | None=None,
+                referer: str | None=None,
                 rendered_hostname_only: bool=True,
                 with_favicon: bool=False,
                 force: bool=False,
                 recapture_interval: int=300,
                 priority: int=0,
-                uuid: Optional[str]=None
+                uuid: str | None=None
                 ) -> str:
         """Enqueue settings.
 
@@ -327,7 +329,7 @@ class LacusCore():
         else:
             perma_uuid = str(uuid4())
 
-        mapping_capture: Dict[str, Union[bytes, float, int, str]] = {}
+        mapping_capture: dict[str, bytes | float | int | str] = {}
         for key, value in to_enqueue.items():
             if isinstance(value, bool):
                 mapping_capture[key] = 1 if value else 0
@@ -344,8 +346,8 @@ class LacusCore():
         try:
             p.execute()
         except DataError:
-            self.master_logger.exception(f'Unable to enqueue: {mapping_capture}')
-            raise LacusCoreException(f'Unable to enqueue: {mapping_capture}')
+            self.master_logger.exception(f'Unable to enqueue: {to_enqueue}')
+            raise LacusCoreException(f'Unable to enqueue: {to_enqueue}')
         return perma_uuid
 
     def _encode_response(self, capture: CaptureResponse) -> CaptureResponseJson:
@@ -371,7 +373,7 @@ class LacusCore():
     def get_capture(self, uuid: str, *, decode: Literal[False]) -> CaptureResponseJson:
         ...
 
-    def get_capture(self, uuid: str, *, decode: bool=False) -> Union[CaptureResponse, CaptureResponseJson]:
+    def get_capture(self, uuid: str, *, decode: bool=False) -> CaptureResponse | CaptureResponseJson:
         """Get the results of a capture, in a json compatible format or not
 
         :param uuid: The UUID if the capture (given by enqueue)
@@ -410,12 +412,12 @@ class LacusCore():
             return CaptureStatus.DONE
         return CaptureStatus.UNKNOWN
 
-    def consume_queue(self, max_consume: int) -> Iterator[Task]:
+    def consume_queue(self, max_consume: int) -> Iterator[Task]:  # type: ignore[type-arg]
         """Trigger the capture for captures with the highest priority. Up to max_consume.
 
         :yield: Captures.
         """
-        value: List[Tuple[bytes, float]]
+        value: list[tuple[bytes, float]]
         while max_consume > 0:
             value = self.redis.zpopmax('lacus:to_capture')
             if not value:
@@ -428,7 +430,7 @@ class LacusCore():
             priority: int = int(value[0][1])
             yield asyncio.create_task(self._capture(uuid, priority), name=uuid)
 
-    async def _capture(self, uuid: str, priority: int):
+    async def _capture(self, uuid: str, priority: int) -> None:
         """Trigger a specific capture
 
         :param uuid: The UUID if the capture (given by enqueue)
@@ -713,8 +715,8 @@ class LacusCore():
             stats_pipeline.expire(f'stats:{today}:captures', expire_time)
             stats_pipeline.execute()
 
-    def _store_capture_response(self, pipeline: Redis, capture_uuid: str, results: CaptureResponse,
-                                root_key: Optional[str]=None) -> None:
+    def _store_capture_response(self, pipeline: Redis, capture_uuid: str, results: CaptureResponse,   # type: ignore[type-arg]
+                                root_key: str | None=None) -> None:
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': capture_uuid})
         if root_key is None:
             root_key = f'lacus:capture_results_hash:{capture_uuid}'
@@ -755,7 +757,7 @@ class LacusCore():
         else:
             logger.critical(f'Nothing to store (Hash: {hash_to_set}) for {root_key}')
 
-    def _get_capture_response(self, capture_uuid: str, root_key: Optional[str]=None) -> Optional[CaptureResponse]:
+    def _get_capture_response(self, capture_uuid: str, root_key: str | None=None) -> CaptureResponse | None:
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': capture_uuid})
         if root_key is None:
             root_key = f'lacus:capture_results_hash:{capture_uuid}'
@@ -797,7 +799,7 @@ class LacusCore():
                 logger.critical(f'Unexpected key in response: {key} - {value}')
         return to_return
 
-    def clear_capture(self, uuid: str, reason: str):
+    def clear_capture(self, uuid: str, reason: str) -> None:
         '''Remove a capture from the list, shouldn't happen unless it is in error'''
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
         capture_status = self.get_capture_status(uuid)
