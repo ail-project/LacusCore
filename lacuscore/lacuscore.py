@@ -23,7 +23,7 @@ from enum import IntEnum, unique
 from logging import LoggerAdapter
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Literal, Optional, Union, Dict, List, Any, TypedDict, overload, Tuple, cast, MutableMapping, Iterator
+from typing import Literal, Any, TypedDict, overload, cast, MutableMapping, Iterator
 from uuid import uuid4
 from urllib.parse import urlsplit
 
@@ -342,7 +342,7 @@ class LacusCore():
         p = self.redis.pipeline()
         p.set(f'lacus:query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
         p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=mapping_capture)  # type: ignore
-        p.zadd('lacus:to_capture', {perma_uuid: priority})
+        p.zadd('lacus:to_capture', {perma_uuid: priority if priority is not None else 0})
         try:
             p.execute()
         except DataError:
