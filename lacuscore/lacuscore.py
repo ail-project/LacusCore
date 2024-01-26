@@ -27,13 +27,13 @@ from typing import Literal, Any, TypedDict, overload, cast, MutableMapping, Iter
 from uuid import uuid4
 from urllib.parse import urlsplit
 
-from defang import refang  # type: ignore
+from defang import refang  # type: ignore[import-untyped]
 from playwrightcapture import Capture, PlaywrightCaptureException
 from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
 from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import DataError
-from ua_parser import user_agent_parser  # type: ignore
+from ua_parser import user_agent_parser  # type: ignore[import-untyped]
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
 
@@ -81,7 +81,7 @@ class CaptureResponse(PlaywrightCaptureResponse, TypedDict, total=False):
     '''A capture made by Lacus. With the base64 encoded image and downloaded file decoded to bytes.'''
 
     # Need to make sure the type is what's expected down the line
-    children: list[CaptureResponse] | None  # type: ignore
+    children: list[CaptureResponse] | None  # type: ignore[misc]
 
     status: int
     runtime: float | None
@@ -125,9 +125,9 @@ class CaptureSettings(TypedDict, total=False):
     viewport: dict[str, int] | None
     referer: str | None
     with_favicon: bool
-    force: bool | None
-    recapture_interval: int | None
-    priority: int | None
+    force: bool
+    recapture_interval: int
+    priority: int
     uuid: str | None
 
     depth: int
@@ -268,11 +268,11 @@ class LacusCore():
             if 'url' in settings and settings['url'] is not None:
                 settings['url'] = settings['url'].strip()
             if settings.get('force') is not None:
-                force = settings.pop('force')  # type: ignore
+                force = settings.pop('force', False)
             if settings.get('recapture_interval') is not None:
-                recapture_interval = settings.pop('recapture_interval')  # type: ignore
+                recapture_interval = settings.pop('recapture_interval', 300)
             if settings.get('priority') is not None:
-                priority = settings.pop('priority')  # type: ignore
+                priority = settings.pop('priority', 0)
             to_enqueue = settings
         else:
             to_enqueue = {'depth': depth, 'rendered_hostname_only': rendered_hostname_only}
@@ -331,17 +331,19 @@ class LacusCore():
 
         mapping_capture: dict[str, bytes | float | int | str] = {}
         for key, value in to_enqueue.items():
+            if value is None:
+                continue
             if isinstance(value, bool):
                 mapping_capture[key] = 1 if value else 0
             elif isinstance(value, (list, dict)):
                 if value:
                     mapping_capture[key] = json.dumps(value)
-            elif value is not None and value != '':  # we're ok with 0 for example
-                mapping_capture[key] = value  # type: ignore
+            elif isinstance(value, (bytes, float, int, str)) and value not in ['', b'']:  # we're ok with 0 for example
+                mapping_capture[key] = value
 
         p = self.redis.pipeline()
         p.set(f'lacus:query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
-        p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=mapping_capture)  # type: ignore
+        p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=mapping_capture)  # type: ignore[arg-type]
         p.zadd('lacus:to_capture', {perma_uuid: priority if priority is not None else 0})
         try:
             p.execute()
@@ -468,22 +470,22 @@ class LacusCore():
                     if k in ['url', 'document_name', 'browser', 'device_name', 'user_agent',
                              'referer', 'timezone_id', 'locale', 'color_scheme']:
                         # string
-                        to_capture[k] = v.decode()  # type: ignore
+                        to_capture[k] = v.decode()  # type: ignore[literal-required]
                     elif k in ['cookies', 'http_credentials', 'viewport', 'geolocation']:
                         # dicts or list
-                        to_capture[k] = json.loads(v)  # type: ignore
+                        to_capture[k] = json.loads(v)  # type: ignore[literal-required]
                     elif k in ['proxy', 'headers']:
                         # can be dict or str
                         try:
-                            to_capture[k] = json.loads(v)  # type: ignore
+                            to_capture[k] = json.loads(v)  # type: ignore[literal-required]
                         except Exception:
-                            to_capture[k] = v.decode()  # type: ignore
+                            to_capture[k] = v.decode()  # type: ignore[literal-required]
                     elif k in ['general_timeout_in_sec', 'depth']:
                         # int
-                        to_capture[k] = int(v)  # type: ignore
+                        to_capture[k] = int(v)  # type: ignore[literal-required]
                     elif k in ['rendered_hostname_only', 'with_favicon']:
                         # bool
-                        to_capture[k] = bool(int(v))  # type: ignore
+                        to_capture[k] = bool(int(v))  # type: ignore[literal-required]
                     elif k == 'document':
                         document_as_bytes = b64decode(v)
                     else:
@@ -581,15 +583,15 @@ class LacusCore():
                         proxy=proxy,
                         general_timeout_in_sec=general_timeout) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
-                    capture.headers = to_capture.get('headers')  # type: ignore
-                    capture.cookies = to_capture.get('cookies')  # type: ignore
-                    capture.viewport = to_capture.get('viewport')  # type: ignore
-                    capture.user_agent = to_capture.get('user_agent')  # type: ignore
-                    capture.http_credentials = to_capture.get('http_credentials')  # type: ignore
-                    capture.geolocation = to_capture.get('geolocation')  # type: ignore
-                    capture.timezone_id = to_capture.get('timezone_id')  # type: ignore
-                    capture.locale = to_capture.get('locale')  # type: ignore
-                    capture.color_scheme = to_capture.get('color_scheme')  # type: ignore
+                    capture.headers = to_capture.get('headers')  # type: ignore[assignment]
+                    capture.cookies = to_capture.get('cookies')  # type: ignore[assignment]
+                    capture.viewport = to_capture.get('viewport')  # type: ignore[assignment]
+                    capture.user_agent = to_capture.get('user_agent')  # type: ignore[assignment]
+                    capture.http_credentials = to_capture.get('http_credentials')  # type: ignore[assignment]
+                    capture.geolocation = to_capture.get('geolocation')  # type: ignore[assignment]
+                    capture.timezone_id = to_capture.get('timezone_id')  # type: ignore[assignment]
+                    capture.locale = to_capture.get('locale')  # type: ignore[assignment]
+                    capture.color_scheme = to_capture.get('color_scheme')  # type: ignore[assignment]
                     try:
                         await asyncio.wait_for(capture.initialize_context(), timeout=general_timeout)
                     except (TimeoutError, asyncio.exceptions.TimeoutError):
@@ -752,10 +754,10 @@ class LacusCore():
             if key in ['har', 'cookies', 'potential_favicons', 'html', 'children'] or not results.get(key):
                 continue
             # these entries can be stored directly
-            hash_to_set[key] = results[key]  # type: ignore
+            hash_to_set[key] = results[key]  # type: ignore[literal-required]
 
         if hash_to_set:
-            pipeline.hset(root_key, mapping=hash_to_set)  # type: ignore
+            pipeline.hset(root_key, mapping=hash_to_set)  # type: ignore[arg-type]
             # Make sure the key expires
             pipeline.expire(root_key, 36000)
         else:
@@ -786,19 +788,19 @@ class LacusCore():
                 to_return['children'] = []
                 for child_root_key in sorted(pickle.loads(value)):
                     if child := self._get_capture_response(capture_uuid, child_root_key):
-                        to_return['children'].append(child)  # type: ignore
+                        to_return['children'].append(child)  # type: ignore[union-attr]
             elif key in [b'status']:
                 # The value in an int
-                to_return[key.decode()] = int(value)  # type: ignore
+                to_return[key.decode()] = int(value)  # type: ignore[literal-required]
             elif key in [b'runtime']:
                 # The value is a float
-                to_return[key.decode()] = float(value)  # type: ignore
+                to_return[key.decode()] = float(value)  # type: ignore[literal-required]
             elif key in [b'last_redirected_url', b'error', b'error_name', b'html', b'downloaded_filename']:
                 # the value is a string
-                to_return[key.decode()] = value.decode()  # type: ignore
+                to_return[key.decode()] = value.decode()  # type: ignore[literal-required]
             elif key in [b'png', b'downloaded_file']:
                 # the value is bytes
-                to_return[key.decode()] = value  # type: ignore
+                to_return[key.decode()] = value  # type: ignore[literal-required]
             else:
                 logger.critical(f'Unexpected key in response: {key} - {value}')
         return to_return
