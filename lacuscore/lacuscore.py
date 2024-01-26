@@ -405,6 +405,10 @@ class LacusCore():
             return CaptureStatus.QUEUED
         elif self.redis.zscore('lacus:ongoing', uuid) is not None:
             return CaptureStatus.ONGOING
+        elif self.redis.exists(f'lacus:capture_settings:{uuid}'):
+            # we might have popped the UUID out of lacus:to_capture
+            # but not pused it in lacus:ongoing yet
+            return CaptureStatus.QUEUED
         elif self.redis.exists(f'lacus:capture_results_hash:{uuid}'):
             return CaptureStatus.DONE
         elif self.redis.exists(f'lacus:capture_results:{uuid}'):
@@ -437,7 +441,7 @@ class LacusCore():
         :param priority: Only for internal use, will decide on the priority of the capture if the try now fails.
         """
         if self.redis.zscore('lacus:ongoing', uuid) is not None:
-            # the capture is ongoing
+            # the capture is already ongoing
             await asyncio.sleep(1)
             return
 
