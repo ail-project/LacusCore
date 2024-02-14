@@ -498,7 +498,7 @@ class LacusCore():
             if not to_capture:
                 all_entries = self.redis.hgetall(f'lacus:capture_settings:{uuid}')
                 result = {'error': f'No capture settings for {uuid} - {all_entries}'}
-                raise CaptureError
+                raise CaptureError(f'No capture settings for {uuid} - {all_entries}')
 
             if document_as_bytes:
                 # we do not have a URL yet.
@@ -519,7 +519,7 @@ class LacusCore():
                 url = refang(url)  # In case we get a defanged url at this stage.
                 if url.lower().startswith('file:') and self.only_global_lookups:
                     result = {'error': f'Not allowed to capture a file on disk: {url}'}
-                    raise CaptureError
+                    raise CaptureError(f'Not allowed to capture a file on disk: {url}')
                 if (not url.lower().startswith('data:')
                         and not url.lower().startswith('http:')
                         and not url.lower().startswith('https:')
@@ -527,9 +527,13 @@ class LacusCore():
                     url = f'http://{url}'
             else:
                 result = {'error': f'No valid URL to capture for {uuid} - {to_capture}'}
-                raise CaptureError
+                raise CaptureError(f'No valid URL to capture for {uuid} - {to_capture}')
 
-            splitted_url = urlsplit(url)
+            try:
+                splitted_url = urlsplit(url)
+            except Exception as e:
+                result = {'error': f'Invalid URL: {url} - {e}'}
+                raise CaptureError(f'Invalid URL: {url} - {e}')
             proxy = to_capture.get('proxy')
             if self.tor_proxy:
                 # check if onion or forced
@@ -549,17 +553,17 @@ class LacusCore():
                         except socket.gaierror:
                             logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
                             result = {'error': f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".'}
-                            raise RetryCapture
+                            raise RetryCapture(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
                         except Exception as e:
                             result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".'}
-                            raise CaptureError
+                            raise CaptureError(f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".')
                         for info in ips_info:
                             if not ipaddress.ip_address(info[-1][0]).is_global:
-                                result = {'error': f'Capturing ressources on private IPs {info[-1][0]} is disabled.'}
-                                raise CaptureError
+                                result = {'error': f'Capturing ressources on private IPs ({info[-1][0]}) is disabled.'}
+                                raise CaptureError(f'Capturing ressources on private IPs ({info[-1][0]}) is disabled.')
                 else:
                     result = {'error': f'Unable to find hostname or IP in the query: "{url}".'}
-                    raise CaptureError
+                    raise CaptureError(f'Unable to find hostname or IP in the query: "{url}".')
 
             browser_engine: BROWSER = "chromium"
             if to_capture.get('user_agent'):
@@ -596,7 +600,7 @@ class LacusCore():
                         await asyncio.wait_for(capture.initialize_context(), timeout=general_timeout)
                     except (TimeoutError, asyncio.exceptions.TimeoutError):
                         logger.warning(f'Initializing the context for {url} took longer than the allowed general timeout ({general_timeout}s)')
-                        raise RetryCapture
+                        raise RetryCapture(f'Initializing the context for {url} took longer than the allowed general timeout ({general_timeout}s)')
                     playwright_result = await asyncio.wait_for(
                         capture.capture_page(
                             url, referer=to_capture.get('referer'),
@@ -610,29 +614,31 @@ class LacusCore():
                         # generate stats
                         if result['error_name'] is not None:
                             stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
+            except RetryCapture as e:
+                raise e
             except PlaywrightCaptureException as e:
                 logger.exception(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': f'Invalid parameters for the capture of {url} - {e}'}
-                raise CaptureError
+                raise CaptureError(f'Invalid parameters for the capture of {url} - {e}')
             except asyncio.CancelledError:
                 logger.warning(f'The capture of {url} has been cancelled.')
                 result = {'error': f'The capture of {url} has been cancelled.'}
                 # The capture can be canceled if it has been running for way too long.
                 # We can give it another short.
-                raise RetryCapture
+                raise RetryCapture(f'The capture of {url} has been cancelled.')
             except (TimeoutError, asyncio.exceptions.TimeoutError):
                 logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
                 result = {'error': f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)'}
-                raise CaptureError
+                raise CaptureError(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
             except Exception as e:
                 logger.exception(f'Something went poorly {url} - {e}')
                 result = {'error': f'Something went poorly {url} - {e}'}
-                raise CaptureError
+                raise CaptureError(f'Something went poorly {url} - {e}')
 
             if capture.should_retry:
                 # PlaywrightCapture considers this capture elligible for a retry
                 logger.info('PlaywrightCapture considers it elligible for a retry.')
-                raise RetryCapture
+                raise RetryCapture('PlaywrightCapture considers it elligible for a retry.')
             elif self.redis.exists(f'lacus:capture_retry:{uuid}'):
                 # this is a retry that worked
                 stats_pipeline.sadd(f'stats:{today}:retry_success', url)
@@ -744,7 +750,7 @@ class LacusCore():
                 child_key = f'{root_key}_{i:0{padding_length}}'
                 if not child:
                     # the child key is empty
-                    logger.warning(f'The response for {child_key} is empty.')
+                    logger.info(f'The response for {child_key} is empty.')
                     continue
                 self._store_capture_response(pipeline, capture_uuid, child, child_key)
                 children.add(child_key)
