@@ -38,6 +38,7 @@ playwrightcapture = {extras = ["recaptcha"], version = "^1.23.2"}
 defang = "^0.5.3"
 ua-parser = "^0.18.0"
 redis = {version = "^5.0.1", extras = ["hiredis"]}
+dnspython = "^2.5.0"
 
 [tool.poetry.extras]
 docs = ["Sphinx"]

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import hashlib
 import json
 import logging
@@ -11,7 +10,6 @@ import os
 import pickle
 import random
 import re
-import socket
 import time
 import unicodedata
 import zlib
@@ -20,12 +18,16 @@ from asyncio import Task
 from base64 import b64decode, b64encode
 from datetime import date, timedelta
 from enum import IntEnum, unique
+from ipaddress import ip_address, IPv4Address, IPv6Address
 from logging import LoggerAdapter
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Literal, Any, TypedDict, overload, cast, MutableMapping, Iterator
 from uuid import uuid4
 from urllib.parse import urlsplit
+
+from dns import resolver
+from dns.exception import DNSException
 
 from defang import refang  # type: ignore[import-untyped]
 from playwrightcapture import Capture, PlaywrightCaptureException
@@ -548,20 +550,26 @@ class LacusCore():
                 # not relevant if we also have a proxy, or the thing to capture is a data URI or a file on disk
                 if splitted_url.netloc:
                     if splitted_url.hostname and splitted_url.hostname.split('.')[-1] != 'onion':
+                        ips_to_check = []
+                        # check if the hostname is an IP
                         try:
-                            socket.settimeout(5)
-                            ips_info = socket.getaddrinfo(splitted_url.hostname, None, proto=socket.IPPROTO_TCP)
-                        except socket.gaierror:
-                            logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
-                            result = {'error': f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".'}
-                            raise RetryCapture(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
-                        except Exception as e:
-                            result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".'}
-                            raise CaptureError(f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".')
-                        for info in ips_info:
-                            if not ipaddress.ip_address(info[-1][0]).is_global:
-                                result = {'error': f'Capturing ressources on private IPs ({info[-1][0]}) is disabled.'}
-                                raise CaptureError(f'Capturing ressources on private IPs ({info[-1][0]}) is disabled.')
+                            _ip = ip_address(splitted_url.hostname)
+                            ips_to_check.append(_ip)
+                        except ValueError:
+                            # not an IP, try resolving
+                            try:
+                                ips_to_check = self.__get_ips(splitted_url.hostname)
+                            except DNSException as e:
+                                logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}": {e}')
+                                result = {'error': f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}": {e}.'}
+                                raise CaptureError(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}": {e}.')
+                            except Exception as e:
+                                result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".'}
+                                raise CaptureError(f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".')
+                        for ip in ips_to_check:
+                            if not ip.is_global:
+                                result = {'error': f'Capturing ressources on private IPs ({ip}) is disabled.'}
+                                raise CaptureError(f'Capturing ressources on private IPs ({ip}) is disabled.')
                 else:
                     result = {'error': f'Unable to find hostname or IP in the query: "{url}".'}
                     raise CaptureError(f'Unable to find hostname or IP in the query: "{url}".')
@@ -833,3 +841,10 @@ class LacusCore():
         p.delete(f'lacus:capture_settings:{uuid}')
         p.zrem('lacus:ongoing', uuid)
         p.execute()
+
+    def __get_ips(self, hostname: str) -> list[IPv4Address | IPv6Address]:
+        # We need to use dnspython for resolving because socket.getaddrinfo will sometimes be stuck for ~10s
+        # It is happening when the error code is NoAnswer
+        answers_a = resolver.resolve(hostname, 'A')
+        answers_aaaa = resolver.resolve(hostname, 'AAAA')
+        return [ip_address(str(answer)) for answer in answers_a] + [ip_address(str(answer)) for answer in answers_aaaa]
