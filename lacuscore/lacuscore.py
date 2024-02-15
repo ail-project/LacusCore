@@ -549,6 +549,7 @@ class LacusCore():
                 if splitted_url.netloc:
                     if splitted_url.hostname and splitted_url.hostname.split('.')[-1] != 'onion':
                         try:
+                            socket.settimeout(5)
                             ips_info = socket.getaddrinfo(splitted_url.hostname, None, proto=socket.IPPROTO_TCP)
                         except socket.gaierror:
                             logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
