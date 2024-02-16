@@ -558,14 +558,14 @@ class LacusCore():
                         except ValueError:
                             # not an IP, try resolving
                             try:
-                                ips_to_check = self.__get_ips(splitted_url.hostname)
-                            except DNSException as e:
-                                logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}": {e}')
-                                result = {'error': f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}": {e}.'}
-                                raise CaptureError(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}": {e}.')
+                                ips_to_check = self.__get_ips(logger, splitted_url.hostname)
                             except Exception as e:
                                 result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".'}
                                 raise CaptureError(f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".')
+                        if not ips_to_check:
+                            logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
+                            result = {'error': f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".'}
+                            raise RetryCapture(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
                         for ip in ips_to_check:
                             if not ip.is_global:
                                 result = {'error': f'Capturing ressources on private IPs ({ip}) is disabled.'}
@@ -842,9 +842,18 @@ class LacusCore():
         p.zrem('lacus:ongoing', uuid)
         p.execute()
 
-    def __get_ips(self, hostname: str) -> list[IPv4Address | IPv6Address]:
+    def __get_ips(self, logger: LacusCoreLogAdapter, hostname: str) -> list[IPv4Address | IPv6Address]:
         # We need to use dnspython for resolving because socket.getaddrinfo will sometimes be stuck for ~10s
         # It is happening when the error code is NoAnswer
-        answers_a = resolver.resolve(hostname, 'A')
-        answers_aaaa = resolver.resolve(hostname, 'AAAA')
-        return [ip_address(str(answer)) for answer in answers_a] + [ip_address(str(answer)) for answer in answers_aaaa]
+        resolved_ips = []
+        try:
+            answers_a = resolver.resolve(hostname, 'A')
+            resolved_ips += [ip_address(str(answer)) for answer in answers_a]
+        except DNSException as e:
+            logger.info(f'No A record for "{hostname}": {e}')
+        try:
+            answers_aaaa = resolver.resolve(hostname, 'AAAA')
+            resolved_ips += [ip_address(str(answer)) for answer in answers_aaaa]
+        except DNSException as e:
+            logger.info(f'No AAAA record for "{hostname}": {e}')
+        return resolved_ips
