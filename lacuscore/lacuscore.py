@@ -10,6 +10,7 @@ import os
 import pickle
 import random
 import re
+import sys
 import time
 import unicodedata
 import zlib
@@ -36,6 +37,11 @@ from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import DataError
 from ua_parser import user_agent_parser  # type: ignore[import-untyped]
+
+if sys.version_info < (3, 11):
+    from async_timeout import timeout
+else:
+    from asyncio import timeout
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
 
@@ -161,7 +167,7 @@ class LacusCore():
                  tor_proxy: str | None=None,
                  only_global_lookups: bool=True,
                  max_retries: int=3,
-                 loglevel: str='INFO') -> None:
+                 loglevel: str | int='INFO') -> None:
         self.master_logger = logging.getLogger(f'{self.__class__.__name__}')
         self.master_logger.setLevel(loglevel)
         self.redis = redis_connector
@@ -594,7 +600,8 @@ class LacusCore():
                         browser=browser_engine,
                         device_name=to_capture.get('device_name'),
                         proxy=proxy,
-                        general_timeout_in_sec=general_timeout) as capture:
+                        general_timeout_in_sec=general_timeout,
+                        loglevel=self.master_logger.getEffectiveLevel()) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.get('headers')  # type: ignore[assignment]
                     capture.cookies = to_capture.get('cookies')  # type: ignore[assignment]
@@ -606,18 +613,18 @@ class LacusCore():
                     capture.locale = to_capture.get('locale')  # type: ignore[assignment]
                     capture.color_scheme = to_capture.get('color_scheme')  # type: ignore[assignment]
                     try:
-                        await asyncio.wait_for(capture.initialize_context(), timeout=general_timeout)
+                        async with timeout(general_timeout):
+                            await capture.initialize_context()
                     except (TimeoutError, asyncio.exceptions.TimeoutError):
                         logger.warning(f'Initializing the context for {url} took longer than the allowed general timeout ({general_timeout}s)')
                         raise RetryCapture(f'Initializing the context for {url} took longer than the allowed general timeout ({general_timeout}s)')
-                    playwright_result = await asyncio.wait_for(
-                        capture.capture_page(
+                    async with timeout(self.max_capture_time):
+                        playwright_result = await capture.capture_page(
                             url, referer=to_capture.get('referer'),
                             depth=to_capture.get('depth', 0),
                             rendered_hostname_only=to_capture.get('rendered_hostname_only', True),
                             with_favicon=to_capture.get('with_favicon', False),
-                            max_depth_capture_time=self.max_capture_time),
-                        timeout=self.max_capture_time)
+                            max_depth_capture_time=self.max_capture_time)
                     result = cast(CaptureResponse, playwright_result)
                     if 'error' in result and 'error_name' in result:
                         # generate stats
