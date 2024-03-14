@@ -29,6 +29,7 @@ from urllib.parse import urlsplit
 
 from dns import resolver
 from dns.exception import DNSException
+from dns.exception import Timeout as DNSTimeout
 
 from defang import refang  # type: ignore[import-untyped]
 from playwrightcapture import Capture, PlaywrightCaptureException
@@ -175,6 +176,10 @@ class LacusCore():
         self.tor_proxy = tor_proxy
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
+        self.dnsresolver: resolver.Resolver = resolver.Resolver()
+        self.dnsresolver.cache = resolver.Cache(30)
+        self.dnsresolver.timeout = 2
+        self.dnsresolver.lifetime = 3
 
         # NOTE: Remove in 1.8.* - clear old ongoing captures queue in case of need
         if self.redis.type('lacus:ongoing') in ['set', b'set']:  # type: ignore[no-untyped-call]
@@ -565,6 +570,10 @@ class LacusCore():
                             # not an IP, try resolving
                             try:
                                 ips_to_check = self.__get_ips(logger, splitted_url.hostname)
+                            except DNSTimeout as e:
+                                # for a timeout, we do not want to retry, as it is likely to timeout again
+                                result = {'error': f'DNS Timeout for "{splitted_url.hostname}": {e}'}
+                                raise CaptureError(f'DNS Timeout for "{splitted_url.hostname}": {e}')
                             except Exception as e:
                                 result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".'}
                                 raise CaptureError(f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".')
@@ -854,13 +863,17 @@ class LacusCore():
         # It is happening when the error code is NoAnswer
         resolved_ips = []
         try:
-            answers_a = resolver.resolve(hostname, 'A')
+            answers_a = self.dnsresolver.resolve(hostname, 'A')
             resolved_ips += [ip_address(str(answer)) for answer in answers_a]
+        except DNSTimeout as e:
+            raise e
         except DNSException as e:
             logger.info(f'No A record for "{hostname}": {e}')
         try:
-            answers_aaaa = resolver.resolve(hostname, 'AAAA')
+            answers_aaaa = self.dnsresolver.resolve(hostname, 'AAAA')
             resolved_ips += [ip_address(str(answer)) for answer in answers_aaaa]
+        except DNSTimeout as e:
+            raise e
         except DNSException as e:
             logger.info(f'No AAAA record for "{hostname}": {e}')
         return resolved_ips
