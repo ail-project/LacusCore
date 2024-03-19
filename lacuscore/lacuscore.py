@@ -134,6 +134,7 @@ class CaptureSettings(TypedDict, total=False):
     viewport: dict[str, int] | None
     referer: str | None
     with_favicon: bool
+    allow_tracking: bool
     force: bool
     recapture_interval: int
     priority: int
@@ -213,6 +214,7 @@ class LacusCore():
                 referer: str | None=None,
                 rendered_hostname_only: bool=True,
                 with_favicon: bool=False,
+                allow_tracking: bool=False,
                 force: bool=False,
                 recapture_interval: int=300,
                 priority: int=0,
@@ -240,6 +242,7 @@ class LacusCore():
                 referer: str | None=None,
                 rendered_hostname_only: bool=True,
                 with_favicon: bool=False,
+                allow_tracking: bool=False,
                 force: bool=False,
                 recapture_interval: int=300,
                 priority: int=0,
@@ -269,6 +272,7 @@ class LacusCore():
         :param referer: The referer URL for the capture
         :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
         :param with_favicon: If True, PlaywrightCapture will attempt to get the potential favicons for the rendered URL. It is a dirty trick, see this issue for details: https://github.com/Lookyloo/PlaywrightCapture/issues/45
+        :param allow_tracking: If True, PlaywrightCapture will attempt to click through the cookie banners. It is totally dependent on the framework used on the website.
         :param force: Force recapture, even if the same one was already done within the recapture_interval
         :param recapture_interval: The time the enqueued settings are kept in memory to avoid duplicates
         :param priority: The priority of the capture
@@ -324,6 +328,8 @@ class LacusCore():
                 to_enqueue['referer'] = referer
             if with_favicon:
                 to_enqueue['with_favicon'] = with_favicon
+            if allow_tracking:
+                to_enqueue['allow_tracking'] = allow_tracking
 
         hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
         if not force:
@@ -471,7 +477,7 @@ class LacusCore():
                             'document', 'browser', 'device_name', 'user_agent', 'proxy',
                             'general_timeout_in_sec', 'cookies', 'headers', 'http_credentials',
                             'viewport', 'referer', 'geolocation', 'timezone_id', 'locale',
-                            'color_scheme', 'with_favicon']
+                            'color_scheme', 'with_favicon', 'allow_tracking']
             result: CaptureResponse = {}
             to_capture: CaptureSettings = {}
             document_as_bytes = b''
@@ -496,7 +502,7 @@ class LacusCore():
                     elif k in ['general_timeout_in_sec', 'depth']:
                         # int
                         to_capture[k] = int(v)  # type: ignore[literal-required]
-                    elif k in ['rendered_hostname_only', 'with_favicon']:
+                    elif k in ['rendered_hostname_only', 'with_favicon', 'allow_tracking']:
                         # bool
                         to_capture[k] = bool(int(v))  # type: ignore[literal-required]
                     elif k == 'document':
@@ -633,6 +639,7 @@ class LacusCore():
                             depth=to_capture.get('depth', 0),
                             rendered_hostname_only=to_capture.get('rendered_hostname_only', True),
                             with_favicon=to_capture.get('with_favicon', False),
+                            allow_tracking=to_capture.get('allow_tracking', False),
                             max_depth_capture_time=self.max_capture_time)
                     result = cast(CaptureResponse, playwright_result)
                     if 'error' in result and 'error_name' in result:
