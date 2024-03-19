@@ -1195,13 +1195,13 @@ test = ["pytest"]
 
 [[package]]
 name = "playwrightcapture"
-version = "1.23.10"
+version = "1.23.11"
 description = "A simple library to capture websites using playwright"
 optional = false
-python-versions = ">=3.8,<4.0"
+python-versions = "<4.0,>=3.8"
 files = [
-    {file = "playwrightcapture-1.23.10-py3-none-any.whl", hash = "sha256:14f02be5266b0be76b64e3ef484b05d8eec05d6d46ca8e2d1aed9f4067baa959"},
-    {file = "playwrightcapture-1.23.10.tar.gz", hash = "sha256:8c30130e96fafdf5db20987b255b7fec2fcf9b11dd66fd253958496fa8718a35"},
+    {file = "playwrightcapture-1.23.11-py3-none-any.whl", hash = "sha256:5bcf79460d86671fe38152bc6e456fe33d7b7b9ed473b73ad560faed9888660e"},
+    {file = "playwrightcapture-1.23.11.tar.gz", hash = "sha256:959bc7b7fbb912b0fe12c9c3cd0a32b206188559defa60bc8140ac11fdf6cdb5"},
 ]
 
 [package.dependencies]
@@ -1213,7 +1213,7 @@ puremagic = ">=1.21,<2.0"
 pydub = {version = ">=0.25.1,<0.26.0", optional = true, markers = "extra == \"recaptcha\""}
 pytz = {version = ">=2024.1,<2025.0", markers = "python_version < \"3.9\""}
 requests = {version = ">=2.31.0,<3.0.0", extras = ["socks"], optional = true, markers = "extra == \"recaptcha\""}
-setuptools = ">=69.1.1,<70.0.0"
+setuptools = ">=69.2.0,<70.0.0"
 SpeechRecognition = {version = ">=3.10.1,<4.0.0", optional = true, markers = "extra == \"recaptcha\""}
 tzdata = ">=2024.1,<2025.0"
 w3lib = ">=2.1.2,<3.0.0"
@@ -2072,4 +2072,4 @@ docs = ["Sphinx", "Sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "676a5b5ccad544d0f581d49bceb6279d78e740b4fa5eb8fdd2cb6fda3ba454b9"
+content-hash = "576aa584485a23eab499ca7c0c6e33c07c64f852acebcba47345ca2ca3d43d1b"
