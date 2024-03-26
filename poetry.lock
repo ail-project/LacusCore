@@ -1195,13 +1195,13 @@ test = ["pytest"]
 
 [[package]]
 name = "playwrightcapture"
-version = "1.23.11"
+version = "1.23.14"
 description = "A simple library to capture websites using playwright"
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "playwrightcapture-1.23.11-py3-none-any.whl", hash = "sha256:5bcf79460d86671fe38152bc6e456fe33d7b7b9ed473b73ad560faed9888660e"},
-    {file = "playwrightcapture-1.23.11.tar.gz", hash = "sha256:959bc7b7fbb912b0fe12c9c3cd0a32b206188559defa60bc8140ac11fdf6cdb5"},
+    {file = "playwrightcapture-1.23.14-py3-none-any.whl", hash = "sha256:bb885f7c4e2a06cbe9633b1b090cb8c8defb38453f016b6ea4507644da2b19dc"},
+    {file = "playwrightcapture-1.23.14.tar.gz", hash = "sha256:d2166073bdd90317e78fef8c18d08e50a616e4cd43ae3af44cb07e10fdf457d8"},
 ]
 
 [package.dependencies]
