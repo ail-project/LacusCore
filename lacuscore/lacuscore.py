@@ -616,7 +616,8 @@ class LacusCore():
                         device_name=to_capture.get('device_name'),
                         proxy=proxy,
                         general_timeout_in_sec=general_timeout,
-                        loglevel=self.master_logger.getEffectiveLevel()) as capture:
+                        loglevel=self.master_logger.getEffectiveLevel(),
+                        uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.get('headers')  # type: ignore[assignment]
                     capture.cookies = to_capture.get('cookies')  # type: ignore[assignment]
