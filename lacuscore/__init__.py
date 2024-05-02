@@ -1,4 +1,5 @@
-from .lacuscore import LacusCore, CaptureStatus, CaptureResponse, CaptureResponseJson, CaptureSettings  # noqa
+from .lacuscore import LacusCore
+from .helpers import CaptureStatus, CaptureResponse, CaptureResponseJson, CaptureSettings  # noqa
 from .lacus_monitoring import LacusCoreMonitoring  # noqa
 
 __all__ = [
