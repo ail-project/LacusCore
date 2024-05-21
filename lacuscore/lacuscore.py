@@ -43,8 +43,18 @@ from .helpers import (
 
 if sys.version_info < (3, 11):
     from async_timeout import timeout
+
+    def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
+        if timeout_cm.expired:
+            logger.warning(f'Timeout expired: {error_message}')
+
 else:
     from asyncio import timeout
+
+    def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
+        if timeout_cm.expired():
+            logger.warning(f'Timeout expired: {error_message}')
+
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
 
@@ -523,8 +533,6 @@ class LacusCore():
                     browser_engine = 'webkit'
             try:
                 logger.debug(f'Capturing {url}')
-                # NOTE: starting with python 3.11, we can use asyncio.timeout
-                # async with asyncio.timeout(self.max_capture_time):
                 general_timeout = to_capture.get('general_timeout_in_sec')
                 stats_pipeline.sadd(f'stats:{today}:captures', url)
                 async with Capture(
@@ -545,12 +553,19 @@ class LacusCore():
                     capture.locale = to_capture.get('locale')  # type: ignore[assignment]
                     capture.color_scheme = to_capture.get('color_scheme')  # type: ignore[assignment]
                     try:
-                        async with timeout(general_timeout):
+                        # make sure the initialization doesn't take too long
+                        if general_timeout is None:
+                            general_timeout = 5
+                        init_timeout = max(general_timeout / 2, 5)
+                        async with timeout(init_timeout) as initialize_timeout:
                             await capture.initialize_context()
+
                     except (TimeoutError, asyncio.exceptions.TimeoutError):
+                        timeout_expired(initialize_timeout, logger, 'Initializing took too long.')
                         logger.warning(f'Initializing the context for {url} took longer than the allowed general timeout ({general_timeout}s)')
                         raise RetryCapture(f'Initializing the context for {url} took longer than the allowed general timeout ({general_timeout}s)')
-                    async with timeout(self.max_capture_time):
+
+                    async with timeout(self.max_capture_time) as capture_timeout:
                         playwright_result = await capture.capture_page(
                             url, referer=to_capture.get('referer'),
                             depth=to_capture.get('depth', 0),
@@ -576,6 +591,7 @@ class LacusCore():
                 # We can give it another short.
                 raise RetryCapture(f'The capture of {url} has been cancelled.')
             except (TimeoutError, asyncio.exceptions.TimeoutError):
+                timeout_expired(capture_timeout, logger, 'Capture took too long.')
                 logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
                 result = {'error': f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)'}
                 raise CaptureError(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
