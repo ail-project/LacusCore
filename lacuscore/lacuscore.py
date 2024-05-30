@@ -533,13 +533,12 @@ class LacusCore():
                     browser_engine = 'webkit'
             try:
                 logger.debug(f'Capturing {url}')
-                general_timeout = to_capture.get('general_timeout_in_sec')
                 stats_pipeline.sadd(f'stats:{today}:captures', url)
                 async with Capture(
                         browser=browser_engine,
                         device_name=to_capture.get('device_name'),
                         proxy=proxy,
-                        general_timeout_in_sec=general_timeout,
+                        general_timeout_in_sec=to_capture.get('general_timeout_in_sec'),
                         loglevel=self.master_logger.getEffectiveLevel(),
                         uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
@@ -552,27 +551,30 @@ class LacusCore():
                     capture.timezone_id = to_capture.get('timezone_id')  # type: ignore[assignment]
                     capture.locale = to_capture.get('locale')  # type: ignore[assignment]
                     capture.color_scheme = to_capture.get('color_scheme')  # type: ignore[assignment]
+
+                    # make sure the initialization doesn't take too long
+                    init_timeout = max(self.max_capture_time / 10, 5)
                     try:
-                        # make sure the initialization doesn't take too long
-                        if general_timeout is None:
-                            general_timeout = 5
-                        init_timeout = max(general_timeout / 2, 5)
                         async with timeout(init_timeout) as initialize_timeout:
                             await capture.initialize_context()
-
                     except (TimeoutError, asyncio.exceptions.TimeoutError):
                         timeout_expired(initialize_timeout, logger, 'Initializing took too long.')
-                        logger.warning(f'Initializing the context for {url} took longer than the allowed general timeout ({general_timeout}s)')
-                        raise RetryCapture(f'Initializing the context for {url} took longer than the allowed general timeout ({general_timeout}s)')
+                        logger.warning(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
+                        raise RetryCapture(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
 
-                    async with timeout(self.max_capture_time) as capture_timeout:
-                        playwright_result = await capture.capture_page(
-                            url, referer=to_capture.get('referer'),
-                            depth=to_capture.get('depth', 0),
-                            rendered_hostname_only=to_capture.get('rendered_hostname_only', True),
-                            with_favicon=to_capture.get('with_favicon', False),
-                            allow_tracking=to_capture.get('allow_tracking', False),
-                            max_depth_capture_time=self.max_capture_time)
+                    try:
+                        async with timeout(self.max_capture_time) as capture_timeout:
+                            playwright_result = await capture.capture_page(
+                                url, referer=to_capture.get('referer'),
+                                depth=to_capture.get('depth', 0),
+                                rendered_hostname_only=to_capture.get('rendered_hostname_only', True),
+                                with_favicon=to_capture.get('with_favicon', False),
+                                allow_tracking=to_capture.get('allow_tracking', False),
+                                max_depth_capture_time=self.max_capture_time)
+                    except (TimeoutError, asyncio.exceptions.TimeoutError):
+                        timeout_expired(capture_timeout, logger, 'Capture took too long.')
+                        logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+                        raise RetryCapture(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
                     result = cast(CaptureResponse, playwright_result)
                     if 'error' in result and 'error_name' in result:
                         # generate stats
@@ -590,11 +592,6 @@ class LacusCore():
                 # The capture can be canceled if it has been running for way too long.
                 # We can give it another short.
                 raise RetryCapture(f'The capture of {url} has been cancelled.')
-            except (TimeoutError, asyncio.exceptions.TimeoutError):
-                timeout_expired(capture_timeout, logger, 'Capture took too long.')
-                logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
-                result = {'error': f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)'}
-                raise CaptureError(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
             except Exception as e:
                 logger.exception(f'Something went poorly {url} - {e}')
                 result = {'error': f'Something went poorly {url} - {e}'}
