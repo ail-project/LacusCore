@@ -583,7 +583,7 @@ class LacusCore():
             except RetryCapture as e:
                 raise e
             except PlaywrightCaptureException as e:
-                logger.exception(f'Invalid parameters for the capture of {url} - {e}')
+                logger.warning(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': f'Invalid parameters for the capture of {url} - {e}'}
                 raise CaptureError(f'Invalid parameters for the capture of {url} - {e}')
             except asyncio.CancelledError:
