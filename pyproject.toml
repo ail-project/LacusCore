@@ -37,7 +37,7 @@ Sphinx = [
 playwrightcapture = {extras = ["recaptcha"], version = "^1.24.11"}
 defang = "^0.5.3"
 ua-parser = "^0.18.0"
-redis = {version = "^5.0.5", extras = ["hiredis"]}
+redis = {version = "^5.0.6", extras = ["hiredis"]}
 dnspython = "^2.6.1"
 async-timeout = {version = "^4.0.3", python = "<3.11"}
 
