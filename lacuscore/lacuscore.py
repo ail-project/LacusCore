@@ -531,6 +531,27 @@ class LacusCore():
                     browser_engine = 'firefox'
                 else:
                     browser_engine = 'webkit'
+
+            cookies: list[dict[str, Any]] = []
+            if to_capture.get('cookies') and to_capture['cookies'] is not None:
+                # In order to properly pass the cookies to playwright,
+                # each of then must have a name, a value and either a domain + path or a URL
+                # Name and value are mandatory, and we cannot auto-fill them.
+                # If the cookie doesn't have a domain + path OR a URL, we fill the domain
+                # with the hostname of the URL we try to capture and the path with "/"
+                for cookie in to_capture['cookies']:
+                    if len(cookie) == 1:
+                        # we have a cookie in the format key: value
+                        name, value = cookie.popitem()
+                        cookie = {'name': name, 'value': value}
+                    if 'name' not in cookie or 'value' not in cookie:
+                        logger.warning(f'Invalid cookie: {cookie}')
+                        continue
+                    if 'domain' not in cookie and 'url' not in cookie:
+                        cookie['domain'] = splitted_url.hostname
+                        cookie['path'] = '/'
+                    cookies.append(cookie)
+
             try:
                 logger.debug(f'Capturing {url}')
                 stats_pipeline.sadd(f'stats:{today}:captures', url)
@@ -543,7 +564,7 @@ class LacusCore():
                         uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.get('headers')  # type: ignore[assignment]
-                    capture.cookies = to_capture.get('cookies')  # type: ignore[assignment]
+                    capture.cookies = cookies  # type: ignore[assignment]
                     capture.viewport = to_capture.get('viewport')  # type: ignore[assignment]
                     capture.user_agent = to_capture.get('user_agent')  # type: ignore[assignment]
                     capture.http_credentials = to_capture.get('http_credentials')  # type: ignore[assignment]
