@@ -633,7 +633,7 @@ class LacusCore():
                 logger.debug(f'Retrying {url} for the first time.')
                 retry = True
                 self.redis.setex(f'lacus:capture_retry:{uuid}',
-                                 self.max_capture_time * (self.max_retries + 1),
+                                 self.max_capture_time * (self.max_retries + 10),
                                  self.max_retries)
             else:
                 current_retry = int(_current_retry.decode())
