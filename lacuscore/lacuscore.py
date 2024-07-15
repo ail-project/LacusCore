@@ -30,7 +30,7 @@ from dns.exception import DNSException
 from dns.exception import Timeout as DNSTimeout
 
 from defang import refang  # type: ignore[import-untyped]
-from playwrightcapture import Capture, PlaywrightCaptureException
+from playwrightcapture import Capture, PlaywrightCaptureException, InvalidPlaywrightParameter
 from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import DataError
@@ -603,7 +603,7 @@ class LacusCore():
                             stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
             except RetryCapture as e:
                 raise e
-            except PlaywrightCaptureException as e:
+            except (PlaywrightCaptureException, InvalidPlaywrightParameter) as e:
                 logger.warning(f'Invalid parameters for the capture of {url} - {e}')
                 result = {'error': f'Invalid parameters for the capture of {url} - {e}'}
                 raise CaptureError(f'Invalid parameters for the capture of {url} - {e}')

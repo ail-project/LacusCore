@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import IntEnum, unique
 from logging import LoggerAdapter
-from typing import MutableMapping, Any, TypedDict
+from typing import MutableMapping, Any, TypedDict, Literal
 
 from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
 
@@ -77,7 +77,7 @@ class CaptureSettings(TypedDict, total=False):
     url: str | None
     document_name: str | None
     document: str | None
-    browser: str | None
+    browser: Literal['chromium', 'firefox', 'webkit'] | None
     device_name: str | None
     user_agent: str | None
     proxy: str | dict[str, str] | None
