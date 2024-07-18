@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
 import os
 import pickle
@@ -114,7 +113,7 @@ class LacusCore():
         return bool(self.redis.ping())
 
     @overload
-    def enqueue(self, *, settings: CaptureSettings | None=None) -> str:
+    def enqueue(self, *, settings: dict[str, Any] | None=None) -> str:
         ...
 
     @overload
@@ -127,7 +126,7 @@ class LacusCore():
                 proxy: str | dict[str, str] | None=None,
                 general_timeout_in_sec: int | None=None,
                 cookies: list[dict[str, Any]] | None=None,
-                headers: str | dict[str, str] | None=None,
+                headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | None=None,
                 geolocation: dict[str, float] | None=None,
                 timezone_id: str | None=None,
@@ -146,7 +145,7 @@ class LacusCore():
         ...
 
     def enqueue(self, *,
-                settings: CaptureSettings | None=None,
+                settings: dict[str, Any] | None=None,
                 url: str | None=None,
                 document_name: str | None=None, document: str | None=None,
                 depth: int=0,
@@ -155,7 +154,7 @@ class LacusCore():
                 proxy: str | dict[str, str] | None=None,
                 general_timeout_in_sec: int | None=None,
                 cookies: list[dict[str, Any]] | None=None,
-                headers: str | dict[str, str] | None=None,
+                headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | None=None,
                 geolocation: dict[str, float] | None=None,
                 timezone_id: str | None=None,
@@ -177,7 +176,7 @@ class LacusCore():
 
         :param url: URL to capture (incompatible with document and document_name)
         :param document_name: Filename of the document to capture (required if document is used)
-        :param document: Document to capture itself (requires a document_name)
+        :param document: Document to capture itself (requires a document_name), must be base64 encoded
         :param depth: [Dangerous] Depth of the capture. If > 0, the URLs of the rendered document will be extracted and captured. It can take a very long time.
         :param browser: The prowser to use for the capture
         :param device_name: The name of the device, must be something Playwright knows
@@ -203,57 +202,20 @@ class LacusCore():
 
         :return: UUID, reference to the capture for later use
         """
-        to_enqueue: CaptureSettings
-        if settings:
-            if 'url' in settings and settings['url'] is not None:
-                settings['url'] = settings['url'].strip()
-            if settings.get('force') is not None:
-                force = settings.pop('force', False)
-            if settings.get('recapture_interval') is not None:
-                recapture_interval = settings.pop('recapture_interval', 300)
-            if settings.get('priority') is not None:
-                priority = settings.pop('priority', 0)
-            to_enqueue = settings
-        else:
-            to_enqueue = {'depth': depth, 'rendered_hostname_only': rendered_hostname_only}
-            if url:
-                to_enqueue['url'] = url.strip()
-            elif document_name and document:
-                to_enqueue['document_name'] = _secure_filename(document_name)
-                to_enqueue['document'] = document
-            if browser:
-                to_enqueue['browser'] = browser
-            if device_name:
-                to_enqueue['device_name'] = device_name
-            if user_agent:
-                to_enqueue['user_agent'] = user_agent
-            if proxy:
-                to_enqueue['proxy'] = proxy
-            if general_timeout_in_sec is not None:  # that would be a terrible idea, but this one could be 0
-                to_enqueue['general_timeout_in_sec'] = general_timeout_in_sec
-            if cookies:
-                to_enqueue['cookies'] = cookies
-            if headers:
-                to_enqueue['headers'] = headers
-            if http_credentials:
-                to_enqueue['http_credentials'] = http_credentials
-            if geolocation:
-                to_enqueue['geolocation'] = geolocation
-            if timezone_id:
-                to_enqueue['timezone_id'] = timezone_id
-            if locale:
-                to_enqueue['locale'] = locale
-            if color_scheme:
-                to_enqueue['color_scheme'] = color_scheme
-            if viewport:
-                to_enqueue['viewport'] = viewport
-            if referer:
-                to_enqueue['referer'] = referer
-            if with_favicon:
-                to_enqueue['with_favicon'] = with_favicon
-            if allow_tracking:
-                to_enqueue['allow_tracking'] = allow_tracking
+        if not settings:
+            settings = {'depth': depth, 'rendered_hostname_only': rendered_hostname_only,
+                        'url': url, 'document_name': document_name, 'document': document,
+                        'browser': browser, 'device_name': device_name,
+                        'user_agent': user_agent, 'proxy': proxy,
+                        'general_timeout_in_sec': general_timeout_in_sec,
+                        'cookies': cookies, 'headers': headers,
+                        'http_credentials': http_credentials, 'geolocation': geolocation,
+                        'timezone_id': timezone_id, 'locale': locale,
+                        'color_scheme': color_scheme, 'viewport': viewport,
+                        'referer': referer, 'with_favicon': with_favicon,
+                        'allow_tracking': allow_tracking}
 
+        to_enqueue = CaptureSettings(**settings)
         hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
         if not force:
             if (existing_uuid := self.redis.get(f'lacus:query_hash:{hash_query}')):
@@ -271,21 +233,9 @@ class LacusCore():
         else:
             perma_uuid = str(uuid4())
 
-        mapping_capture: dict[str, bytes | float | int | str] = {}
-        for key, value in to_enqueue.items():
-            if value is None:
-                continue
-            if isinstance(value, bool):
-                mapping_capture[key] = 1 if value else 0
-            elif isinstance(value, (list, dict)):
-                if value:
-                    mapping_capture[key] = json.dumps(value)
-            elif isinstance(value, (bytes, float, int, str)) and value not in ['', b'']:  # we're ok with 0 for example
-                mapping_capture[key] = value
-
         p = self.redis.pipeline()
         p.set(f'lacus:query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
-        p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=mapping_capture)  # type: ignore[arg-type]
+        p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=to_enqueue.redis_dump())
         p.zadd('lacus:to_capture', {perma_uuid: priority if priority is not None else 0})
         try:
             p.execute()
@@ -399,55 +349,30 @@ class LacusCore():
 
         retry = False
         try:
-            setting_keys = ['depth', 'rendered_hostname_only', 'url', 'document_name',
-                            'document', 'browser', 'device_name', 'user_agent', 'proxy',
-                            'general_timeout_in_sec', 'cookies', 'headers', 'http_credentials',
-                            'viewport', 'referer', 'geolocation', 'timezone_id', 'locale',
-                            'color_scheme', 'with_favicon', 'allow_tracking']
             result: CaptureResponse = {}
-            to_capture: CaptureSettings = {}
-            document_as_bytes = b''
+            _to_capture: dict[bytes, Any] = {}
             url: str = ''
             try:
-                for k, v in zip(setting_keys, self.redis.hmget(f'lacus:capture_settings:{uuid}', setting_keys)):
-                    if v is None:
-                        continue
-                    if k in ['url', 'document_name', 'browser', 'device_name', 'user_agent',
-                             'referer', 'timezone_id', 'locale', 'color_scheme']:
-                        # string
-                        to_capture[k] = v.decode()  # type: ignore[literal-required]
-                    elif k in ['cookies', 'http_credentials', 'viewport', 'geolocation']:
-                        # dicts or list
-                        to_capture[k] = json.loads(v)  # type: ignore[literal-required]
-                    elif k in ['proxy', 'headers']:
-                        # can be dict or str
-                        try:
-                            to_capture[k] = json.loads(v)  # type: ignore[literal-required]
-                        except Exception:
-                            to_capture[k] = v.decode()  # type: ignore[literal-required]
-                    elif k in ['general_timeout_in_sec', 'depth']:
-                        # int
-                        to_capture[k] = int(v)  # type: ignore[literal-required]
-                    elif k in ['rendered_hostname_only', 'with_favicon', 'allow_tracking']:
-                        # bool
-                        to_capture[k] = bool(int(v))  # type: ignore[literal-required]
-                    elif k == 'document':
-                        document_as_bytes = b64decode(v)
-                    else:
-                        raise CaptureSettingsError(f'Unexpected setting: {k}: {v}')
+                _to_capture = self.redis.hgetall(f'lacus:capture_settings:{uuid}')
             except CaptureSettingsError as e:
                 raise e
             except Exception as e:
                 raise CaptureSettingsError(f'Error while preparing settings: {e}')
 
-            if not to_capture:
-                all_entries = self.redis.hgetall(f'lacus:capture_settings:{uuid}')
-                result = {'error': f'No capture settings for {uuid} - {all_entries}'}
-                raise CaptureError(f'No capture settings for {uuid} - {all_entries}')
+            if not _to_capture:
+                result = {'error': f'No capture settings for {uuid}'}
+                raise CaptureError(f'No capture settings for {uuid}')
 
-            if document_as_bytes:
+            try:
+                to_capture = CaptureSettings(**{k.decode(): v.decode() for k, v in _to_capture.items()})
+            except Exception as e:
+                logger.warning(f'Settings invalid: {e}')
+                raise CaptureSettingsError(f'Settings invalid: {e}')
+
+            if to_capture.document:
                 # we do not have a URL yet.
-                name = to_capture.pop('document_name', None)
+                name = to_capture.document_name
+                document_as_bytes = b64decode(to_capture.document)
                 if not name:
                     raise CaptureSettingsError('No document name provided, settings are invalid')
                 if not Path(name).suffix:
@@ -459,8 +384,8 @@ class LacusCore():
                 with open(tmp_f.name, "wb") as f:
                     f.write(document_as_bytes)
                 url = f'file://{tmp_f.name}'
-            elif to_capture.get('url') and to_capture['url'] is not None:
-                url = to_capture['url'].strip()
+            elif to_capture.url:
+                url = to_capture.url.strip()
                 url = refang(url)  # In case we get a defanged url at this stage.
                 if url.lower().startswith('file:') and self.only_global_lookups:
                     result = {'error': f'Not allowed to capture a file on disk: {url}'}
@@ -479,7 +404,7 @@ class LacusCore():
             except Exception as e:
                 result = {'error': f'Invalid URL: {url} - {e}'}
                 raise CaptureError(f'Invalid URL: {url} - {e}')
-            proxy = to_capture.get('proxy')
+            proxy = to_capture.proxy
             if self.tor_proxy:
                 # check if onion or forced
                 if (proxy == 'force_tor'  # if the proxy is set to "force_tor", we use the pre-configured tor proxy, regardless the URL.
@@ -522,8 +447,8 @@ class LacusCore():
                     raise CaptureError(f'Unable to find hostname or IP in the query: "{url}".')
 
             browser_engine: BROWSER = "chromium"
-            if to_capture.get('user_agent'):
-                parsed_string = user_agent_parser.ParseUserAgent(to_capture.get('user_agent'))
+            if to_capture.user_agent:
+                parsed_string = user_agent_parser.ParseUserAgent(to_capture.user_agent)
                 browser_family = parsed_string['family'].lower()
                 if browser_family.startswith('chrom'):
                     browser_engine = 'chromium'
@@ -533,13 +458,13 @@ class LacusCore():
                     browser_engine = 'webkit'
 
             cookies: list[dict[str, Any]] = []
-            if to_capture.get('cookies') and to_capture['cookies'] is not None:
+            if to_capture.cookies:
                 # In order to properly pass the cookies to playwright,
                 # each of then must have a name, a value and either a domain + path or a URL
                 # Name and value are mandatory, and we cannot auto-fill them.
                 # If the cookie doesn't have a domain + path OR a URL, we fill the domain
                 # with the hostname of the URL we try to capture and the path with "/"
-                for cookie in to_capture['cookies']:
+                for cookie in to_capture.cookies:
                     if len(cookie) == 1:
                         # we have a cookie in the format key: value
                         name, value = cookie.popitem()
@@ -557,21 +482,21 @@ class LacusCore():
                 stats_pipeline.sadd(f'stats:{today}:captures', url)
                 async with Capture(
                         browser=browser_engine,
-                        device_name=to_capture.get('device_name'),
+                        device_name=to_capture.device_name,
                         proxy=proxy,
-                        general_timeout_in_sec=to_capture.get('general_timeout_in_sec'),
+                        general_timeout_in_sec=to_capture.general_timeout_in_sec,
                         loglevel=self.master_logger.getEffectiveLevel(),
                         uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
-                    capture.headers = to_capture.get('headers')  # type: ignore[assignment]
+                    capture.headers = to_capture.headers  # type: ignore[assignment]
                     capture.cookies = cookies  # type: ignore[assignment]
-                    capture.viewport = to_capture.get('viewport')  # type: ignore[assignment]
-                    capture.user_agent = to_capture.get('user_agent')  # type: ignore[assignment]
-                    capture.http_credentials = to_capture.get('http_credentials')  # type: ignore[assignment]
-                    capture.geolocation = to_capture.get('geolocation')  # type: ignore[assignment]
-                    capture.timezone_id = to_capture.get('timezone_id')  # type: ignore[assignment]
-                    capture.locale = to_capture.get('locale')  # type: ignore[assignment]
-                    capture.color_scheme = to_capture.get('color_scheme')  # type: ignore[assignment]
+                    capture.viewport = to_capture.viewport  # type: ignore[assignment]
+                    capture.user_agent = to_capture.user_agent  # type: ignore[assignment]
+                    capture.http_credentials = to_capture.http_credentials  # type: ignore[assignment]
+                    capture.geolocation = to_capture.geolocation  # type: ignore[assignment]
+                    capture.timezone_id = to_capture.timezone_id  # type: ignore[assignment]
+                    capture.locale = to_capture.locale  # type: ignore[assignment]
+                    capture.color_scheme = to_capture.color_scheme  # type: ignore[assignment]
 
                     # make sure the initialization doesn't take too long
                     init_timeout = max(self.max_capture_time / 10, 5)
@@ -586,11 +511,11 @@ class LacusCore():
                     try:
                         async with timeout(self.max_capture_time) as capture_timeout:
                             playwright_result = await capture.capture_page(
-                                url, referer=to_capture.get('referer'),
-                                depth=to_capture.get('depth', 0),
-                                rendered_hostname_only=to_capture.get('rendered_hostname_only', True),
-                                with_favicon=to_capture.get('with_favicon', False),
-                                allow_tracking=to_capture.get('allow_tracking', False),
+                                url, referer=to_capture.referer,
+                                depth=to_capture.depth,
+                                rendered_hostname_only=to_capture.rendered_hostname_only,
+                                with_favicon=to_capture.with_favicon,
+                                allow_tracking=to_capture.allow_tracking,
                                 max_depth_capture_time=self.max_capture_time)
                     except (TimeoutError, asyncio.exceptions.TimeoutError):
                         timeout_expired(capture_timeout, logger, 'Capture took too long.')
@@ -669,7 +594,7 @@ class LacusCore():
             #       from the lacus:ongoing sorted set (it is definitely not ongoing anymore)
             #       and optionally re-added to lacus:to_capture if re want to retry it
 
-            if to_capture.get('document'):
+            if to_capture.document:
                 os.unlink(tmp_f.name)
 
             if retry:
