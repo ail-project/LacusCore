@@ -433,8 +433,8 @@ class LacusCore():
 
             # Set default as chromium
             browser_engine: BROWSER = "chromium"
-            if to_capture.browser:
-                browser_engine = to_capture.browser
+            if to_capture.browser in ['chromium', 'firefox', 'webkit']:
+                browser_engine = to_capture.browser  # type: ignore[assignment]
             elif to_capture.user_agent:
                 parsed_string = user_agent_parser.ParseUserAgent(to_capture.user_agent)
                 browser_family = parsed_string['family'].lower()
