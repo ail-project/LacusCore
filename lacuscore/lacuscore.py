@@ -18,7 +18,6 @@ from asyncio import Task
 from base64 import b64decode, b64encode
 from datetime import date, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
-from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Literal, Any, overload, cast, Iterator
 from uuid import uuid4
@@ -28,8 +27,8 @@ from dns import resolver
 from dns.exception import DNSException
 from dns.exception import Timeout as DNSTimeout
 
-from defang import refang  # type: ignore[import-untyped]
 from playwrightcapture import Capture, PlaywrightCaptureException, InvalidPlaywrightParameter
+from pydantic import ValidationError
 from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import DataError
@@ -215,7 +214,12 @@ class LacusCore():
                         'referer': referer, 'with_favicon': with_favicon,
                         'allow_tracking': allow_tracking}
 
-        to_enqueue = CaptureSettings(**settings)
+        try:
+            to_enqueue = CaptureSettings(**settings)
+        except ValidationError as e:
+            self.master_logger.warning(f'Unable to validate settings: {e}.')
+            raise CaptureSettingsError('Invalid settings', e)
+
         hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
         if not force:
             if (existing_uuid := self.redis.get(f'lacus:query_hash:{hash_query}')):
@@ -352,12 +356,7 @@ class LacusCore():
             result: CaptureResponse = {}
             _to_capture: dict[bytes, Any] = {}
             url: str = ''
-            try:
-                _to_capture = self.redis.hgetall(f'lacus:capture_settings:{uuid}')
-            except CaptureSettingsError as e:
-                raise e
-            except Exception as e:
-                raise CaptureSettingsError(f'Error while preparing settings: {e}')
+            _to_capture = self.redis.hgetall(f'lacus:capture_settings:{uuid}')
 
             if not _to_capture:
                 result = {'error': f'No capture settings for {uuid}'}
@@ -365,36 +364,22 @@ class LacusCore():
 
             try:
                 to_capture = CaptureSettings(**{k.decode(): v.decode() for k, v in _to_capture.items()})
-            except Exception as e:
+            except ValidationError as e:
                 logger.warning(f'Settings invalid: {e}')
-                raise CaptureSettingsError(f'Settings invalid: {e}')
+                raise CaptureSettingsError('Invalid settings', e)
 
             if to_capture.document:
                 # we do not have a URL yet.
-                name = to_capture.document_name
                 document_as_bytes = b64decode(to_capture.document)
-                if not name:
-                    raise CaptureSettingsError('No document name provided, settings are invalid')
-                if not Path(name).suffix:
-                    # The browser will simply display the file as text if there is no extension.
-                    # Just add HTML as a fallback, as it will be the most comon one.
-                    name = f'{name}.html'
-                document_name = Path(name).name
-                tmp_f = NamedTemporaryFile(suffix=document_name, delete=False)
+                tmp_f = NamedTemporaryFile(suffix=to_capture.document_name, delete=False)
                 with open(tmp_f.name, "wb") as f:
                     f.write(document_as_bytes)
                 url = f'file://{tmp_f.name}'
             elif to_capture.url:
-                url = to_capture.url.strip()
-                url = refang(url)  # In case we get a defanged url at this stage.
-                if url.lower().startswith('file:') and self.only_global_lookups:
+                if to_capture.url.lower().startswith('file:') and self.only_global_lookups:
                     result = {'error': f'Not allowed to capture a file on disk: {url}'}
                     raise CaptureError(f'Not allowed to capture a file on disk: {url}')
-                if (not url.lower().startswith('data:')
-                        and not url.lower().startswith('http:')
-                        and not url.lower().startswith('https:')
-                        and not url.lower().startswith('file:')):
-                    url = f'http://{url}'
+                url = to_capture.url
             else:
                 result = {'error': f'No valid URL to capture for {uuid} - {to_capture}'}
                 raise CaptureError(f'No valid URL to capture for {uuid} - {to_capture}')
@@ -446,8 +431,11 @@ class LacusCore():
                     result = {'error': f'Unable to find hostname or IP in the query: "{url}".'}
                     raise CaptureError(f'Unable to find hostname or IP in the query: "{url}".')
 
+            # Set default as chromium
             browser_engine: BROWSER = "chromium"
-            if to_capture.user_agent:
+            if to_capture.browser:
+                browser_engine = to_capture.browser
+            elif to_capture.user_agent:
                 parsed_string = user_agent_parser.ParseUserAgent(to_capture.user_agent)
                 browser_family = parsed_string['family'].lower()
                 if browser_family.startswith('chrom'):
@@ -464,6 +452,7 @@ class LacusCore():
                 # Name and value are mandatory, and we cannot auto-fill them.
                 # If the cookie doesn't have a domain + path OR a URL, we fill the domain
                 # with the hostname of the URL we try to capture and the path with "/"
+                # NOTE: these changes can only be done here because we need the URL.
                 for cookie in to_capture.cookies:
                     if len(cookie) == 1:
                         # we have a cookie in the format key: value

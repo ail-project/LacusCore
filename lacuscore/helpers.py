@@ -8,7 +8,8 @@ from enum import IntEnum, unique
 from logging import LoggerAdapter
 from typing import MutableMapping, Any, TypedDict, Literal, Mapping
 
-from pydantic import BaseModel, field_validator, model_validator
+from defang import refang  # type: ignore[import-untyped]
+from pydantic import BaseModel, field_validator, model_validator, ValidationError
 from pydantic_core import from_json
 
 from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
@@ -27,7 +28,11 @@ class RetryCapture(LacusCoreException):
 
 
 class CaptureSettingsError(LacusCoreException):
-    pass
+    '''Can handle Pydantic validation errors'''
+
+    def __init__(self, message: str, pydantic_validation_errors: ValidationError | None=None) -> None:
+        super().__init__(message)
+        self.pydantic_validation_errors = pydantic_validation_errors
 
 
 class LacusCoreLogAdapter(LoggerAdapter):  # type: ignore[type-arg]
@@ -108,6 +113,11 @@ class CaptureSettings(BaseModel):
 
     @model_validator(mode='after')
     def check_capture_element(self) -> CaptureSettings:
+        if self.document_name and not self.document:
+            raise CaptureSettingsError('You must provide a document if you provide a document name')
+        if self.document and not self.document_name:
+            raise CaptureSettingsError('You must provide a document name if you provide a document')
+
         if self.url and (self.document or self.document_name):
             raise CaptureSettingsError('You cannot provide both a URL and a document to capture')
         if not self.url and not (self.document and self.document_name):
@@ -118,14 +128,26 @@ class CaptureSettings(BaseModel):
     @classmethod
     def load_url(cls, v: str | None) -> str | None:
         if isinstance(v, str):
-            return v.strip()
+            url = v.strip()
+            url = refang(url)  # In case we get a defanged url at this stage.
+            if (not url.lower().startswith('data:')
+                    and not url.lower().startswith('http:')
+                    and not url.lower().startswith('https:')
+                    and not url.lower().startswith('file:')):
+                url = f'http://{url}'
+            return url
         return v
 
     @field_validator('document_name', mode='after')
     @classmethod
     def load_document_name(cls, v: str | None) -> str | None:
         if isinstance(v, str):
-            return v.strip()
+            name = v.strip()
+            if '.' not in name:
+                # The browser will simply display the file as text if there is no extension.
+                # Just add HTML as a fallback, as it will be the most comon one.
+                name = f'{name}.html'
+            return name
         return v
 
     @field_validator('proxy', mode='before')
@@ -190,6 +212,15 @@ class CaptureSettings(BaseModel):
             return v
         return None
 
+    @field_validator('http_credentials', mode='after')
+    @classmethod
+    def check_http_creds(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if not v:
+            return v
+        if 'username' in v and 'password' in v:
+            return v
+        raise CaptureSettingsError(f'HTTP credentials must have a username and a password: {v}')
+
     @field_validator('geolocation', mode='before')
     @classmethod
     def load_geolocation_json(cls, v: Any) -> dict[str, float] | None:
@@ -202,6 +233,15 @@ class CaptureSettings(BaseModel):
             return v
         return None
 
+    @field_validator('geolocation', mode='after')
+    @classmethod
+    def check_geolocation(cls, v: dict[str, float] | None) -> dict[str, float] | None:
+        if not v:
+            return v
+        if 'latitude' in v and 'longitude' in v:
+            return v
+        raise CaptureSettingsError(f'A geolocation must have a latitude and a longitude: {v}')
+
     @field_validator('viewport', mode='before')
     @classmethod
     def load_viewport_json(cls, v: Any) -> dict[str, int] | None:
@@ -213,6 +253,15 @@ class CaptureSettings(BaseModel):
         elif isinstance(v, dict):
             return v
         return None
+
+    @field_validator('viewport', mode='after')
+    @classmethod
+    def check_viewport(cls, v: dict[str, int] | None) -> dict[str, int] | None:
+        if not v:
+            return v
+        if 'width' in v and 'height' in v:
+            return v
+        raise CaptureSettingsError(f'A viewport must have a width and a height: {v}')
 
     def redis_dump(self) -> Mapping[str | bytes, bytes | float | int | str]:
         mapping_capture: dict[str | bytes, bytes | float | int | str] = {}
