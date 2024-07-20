@@ -6,7 +6,6 @@ from typing import Any, Coroutine, Optional, TypeVar, Tuple
 
 import asyncio
 import functools
-import logging
 
 from .helpers import LacusCoreLogAdapter
 
@@ -43,7 +42,7 @@ def create_task(
 def _handle_task_result(
     task: asyncio.Task[Any],
     *,
-    logger: logging.Logger,
+    logger: 'LacusCoreLogAdapter',
     message: str,
     message_args: Tuple[Any, ...] = (),
 ) -> None:

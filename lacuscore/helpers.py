@@ -6,7 +6,7 @@ import json
 
 from enum import IntEnum, unique
 from logging import LoggerAdapter
-from typing import MutableMapping, Any, TypedDict, Mapping
+from typing import MutableMapping, Any, TypedDict, Mapping, Literal
 
 from defang import refang  # type: ignore[import-untyped]
 from pydantic import BaseModel, field_validator, model_validator, ValidationError
@@ -87,7 +87,7 @@ class CaptureSettings(BaseModel):
     url: str | None = None
     document_name: str | None = None
     document: str | None = None
-    browser: str | None = None
+    browser: Literal['chromium', 'firefox', 'webkit'] | None = None
     device_name: str | None = None
     user_agent: str | None = None
     proxy: str | dict[str, str] | None = None
@@ -149,6 +149,14 @@ class CaptureSettings(BaseModel):
                 name = f'{name}.html'
             return name
         return v
+
+    @field_validator('browser', mode='before')
+    @classmethod
+    def load_browser(cls, v: Any) -> str | None:
+        if isinstance(v, str) and v.strip() in ['chromium', 'firefox', 'webkit']:
+            return v.strip()
+        # There are old captures where the browser is not a playwright browser name, so we ignore it.
+        return None
 
     @field_validator('proxy', mode='before')
     @classmethod
