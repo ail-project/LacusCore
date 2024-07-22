@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lacuscore"
-version = "1.10.6"
+version = "1.10.7"
 description = "Core of Lacus, usable as a module"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"

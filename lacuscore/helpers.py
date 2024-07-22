@@ -101,7 +101,7 @@ class CaptureSettings(BaseModel):
     color_scheme: str | None = None
     viewport: dict[str, int] | None = None
     referer: str | None = None
-    with_favicon: bool = False
+    with_favicon: bool = True
     allow_tracking: bool = False
     force: bool = False
     recapture_interval: int = 300
