@@ -1758,13 +1758,13 @@ test = ["pytest"]
 
 [[package]]
 name = "playwrightcapture"
-version = "1.25.7"
+version = "1.25.8"
 description = "A simple library to capture websites using playwright"
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "playwrightcapture-1.25.7-py3-none-any.whl", hash = "sha256:1762497cdb0f22dcaf7b1521e6bfa1fabebd6169412af2c73e1cb6af7908f0c4"},
-    {file = "playwrightcapture-1.25.7.tar.gz", hash = "sha256:b7958dccaf9860697b042e1ccc32da2c34a861e5292e0c22c90897bc46126b06"},
+    {file = "playwrightcapture-1.25.8-py3-none-any.whl", hash = "sha256:de10484da0aa4fe1931936afa05051e34ac7e7c72d80a21b0ff758b87f3ece58"},
+    {file = "playwrightcapture-1.25.8.tar.gz", hash = "sha256:a035eeacc70f87efaaaf75f539477e986a16b1e1ff5e45cf37e88c41e6a455bc"},
 ]
 
 [package.dependencies]
@@ -2950,4 +2950,4 @@ docs = ["Sphinx", "Sphinx"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "46db73fe20c9a14e073c34ca1b62f8ead19528fb9ad99ce76b80be0c86dbfa00"
+content-hash = "4cd90d553399df969bf515cb6148f592e525a90667944a76a101bdd657dd7e5e"
