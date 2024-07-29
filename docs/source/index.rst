@@ -44,29 +44,41 @@ The example below is the minimum viable code to use in order to capture a URL.
     from redis import Redis
     from lacuscore import LacusCore
 
-    redis = Redis()
+    redis = Redis()  # Connector to a running Redis/Valkey instance
     lacus = LacusCore(redis)
-    uuid = lacus.enqueue('google.fr')
+    uuid = lacus.enqueue(url='google.fr')
 
-* Capture
+* Trigger the captures with the highest priority from the queue
 
-  * Option 1: Trigger a specific capture via the UUID returned by the `enqueue` call
+.. code:: python
 
-    .. code:: python
+    import asyncio
 
-      await lacus.capture(uuid)
+    from redis import Redis
 
-  * Option 2: Trigger the capture with the highest priority from the queue
+    from lacuscore import LacusCore
 
-    .. code:: python
+    redis = Redis()  # Connector to a running Redis/Valkey instance
+    lacus = LacusCore(redis)
 
-      uuid = await lacus.consume_queue()
+    async def run_captures():
+        max_captures_to_consume = 10
+        captures = set()
+        for capture_task in lacus.consume_queue(max_captures_to_consume):
+            captures.add(capture_task)  # adds the task to the set
+            capture_task.add_done_callback(captures.discard)  # remove the task from the set when done
+
+        await asyncio.gather(*captures)  # wait for all tasks to complete
+
+    asyncio.run(run_captures())
 
 * Capture Status
 
 .. code:: python
 
     status = lacus.get_capture_status(uuid)
+
+    # 0 = queued / 1 = done / 2 = ongoing / -1 = Unknown UUID
 
 * Capture result
 
