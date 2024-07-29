@@ -20,15 +20,7 @@ Usage
 The recommended way to use this module is as follows:
 
 1. Enqueue what you want to capture with `enqueue` (it returns a UUID)
-2. Trigger the capture itself. For that, you have two options
-
-  * The `capture` method directly, if you pass it the UUID you got from `enqueue`.
-    This is what you want to use to do the capture in the same process as the one enqueuing the capture
-
-  * If you rather want to enqueue the captures in one part of your code and trigger the captures in an other one,
-    use `consume_queue` which will pick a capture from the queue and trigger the capture.
-    I this case, you should use `get_capture_status` to check if the capture is over before the last step.
-
+2. Trigger the enqueued captures themselves, wait for them to finish.
 3. Get the capture result with `get_capture` with the UUID from you got from `enqueue`.
 
 
