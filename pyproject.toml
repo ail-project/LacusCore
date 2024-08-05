@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lacuscore"
-version = "1.10.8"
+version = "1.10.9"
 description = "Core of Lacus, usable as a module"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
@@ -32,12 +32,13 @@ python = "^3.8"
 requests = "^2.32.3"
 Sphinx = [
    {version = "<7.2", python = "<3.9", optional = true},
-   {version = "^7.2", python = ">=3.9", optional = true}
+   {version = "^7.2", python = ">=3.9,<3.10", optional = true},
+   {version = "^8", python = ">=3.10", optional = true}
 ]
-playwrightcapture = {extras = ["recaptcha"], version = "^1.25.9"}
+playwrightcapture = {extras = ["recaptcha"], version = "^1.25.10"}
 defang = "^0.5.3"
 ua-parser = "^0.18.0"
-redis = {version = "^5.0.7", extras = ["hiredis"]}
+redis = {version = "^5.0.8", extras = ["hiredis"]}
 dnspython = "^2.6.1"
 async-timeout = {version = "^4.0.3", python = "<3.11"}
 pydantic = "^2.8.2"
@@ -47,8 +48,8 @@ eval-type-backport = {version = "^0.2.0", python = "<3.10"}
 docs = ["Sphinx"]
 
 [tool.poetry.group.dev.dependencies]
-types-redis = {version = "^4.6.0.20240425"}
-mypy = "^1.11.0"
+types-redis = {version = "^4.6.0.20240726"}
+mypy = "^1.11.1"
 types-requests = "^2.32.0.20240712"
 types-beautifulsoup4 = "^4.12.0.20240511"
 ipython = [
@@ -56,7 +57,7 @@ ipython = [
     {version = "^8.18.0", python = ">=3.9"},
     {version = "^8.19.0", python = ">=3.10"}
 ]
-pytest = "^8.3.1"
+pytest = "^8.3.2"
 
 [build-system]
 requires = ["poetry_core"]

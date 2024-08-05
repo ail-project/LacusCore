@@ -53,7 +53,7 @@ The example below is the minimum viable code to use in order to capture a URL.
     redis = Redis()  # Connector to a running Redis/Valkey instance
     lacus = LacusCore(redis)
 
-    async def run_captures():
+    async def run_captures() -> None:
         max_captures_to_consume = 10
         captures = set()
         for capture_task in lacus.consume_queue(max_captures_to_consume):
