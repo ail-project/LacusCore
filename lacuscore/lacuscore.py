@@ -103,6 +103,9 @@ class LacusCore():
         self.dnsresolver.timeout = 2
         self.dnsresolver.lifetime = 3
 
+        # Enable new chromium headless by default.
+        os.environ["PLAYWRIGHT_CHROMIUM_USE_HEADLESS_NEW"] = "1"
+
         # NOTE: Remove in 1.8.* - clear old ongoing captures queue in case of need
         if self.redis.type('lacus:ongoing') in ['set', b'set']:  # type: ignore[no-untyped-call]
             self.redis.delete('lacus:ongoing')
