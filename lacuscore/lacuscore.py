@@ -23,7 +23,8 @@ from typing import Literal, Any, overload, cast, Iterator
 from uuid import uuid4
 from urllib.parse import urlsplit
 
-from dns import resolver
+from dns.resolver import Cache
+from dns.asyncresolver import Resolver
 from dns.exception import DNSException
 from dns.exception import Timeout as DNSTimeout
 
@@ -98,8 +99,8 @@ class LacusCore():
         self.tor_proxy = tor_proxy
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
-        self.dnsresolver: resolver.Resolver = resolver.Resolver()
-        self.dnsresolver.cache = resolver.Cache(30)
+        self.dnsresolver: Resolver = Resolver()
+        self.dnsresolver.cache = Cache(900)
         self.dnsresolver.timeout = 2
         self.dnsresolver.lifetime = 3
 
@@ -414,7 +415,7 @@ class LacusCore():
                         except ValueError:
                             # not an IP, try resolving
                             try:
-                                ips_to_check = self.__get_ips(logger, splitted_url.hostname)
+                                ips_to_check = await self.__get_ips(logger, splitted_url.hostname)
                             except DNSTimeout as e:
                                 # for a timeout, we do not want to retry, as it is likely to timeout again
                                 result = {'error': f'DNS Timeout for "{splitted_url.hostname}": {e}'}
@@ -733,22 +734,40 @@ class LacusCore():
         p.zrem('lacus:ongoing', uuid)
         p.execute()
 
-    def __get_ips(self, logger: LacusCoreLogAdapter, hostname: str) -> list[IPv4Address | IPv6Address]:
+    async def __get_ips(self, logger: LacusCoreLogAdapter, hostname: str) -> list[IPv4Address | IPv6Address]:
         # We need to use dnspython for resolving because socket.getaddrinfo will sometimes be stuck for ~10s
         # It is happening when the error code is NoAnswer
         resolved_ips = []
-        try:
-            answers_a = self.dnsresolver.resolve(hostname, 'A')
-            resolved_ips += [ip_address(str(answer)) for answer in answers_a]
-        except DNSTimeout as e:
-            raise e
-        except DNSException as e:
-            logger.info(f'No A record for "{hostname}": {e}')
-        try:
-            answers_aaaa = self.dnsresolver.resolve(hostname, 'AAAA')
-            resolved_ips += [ip_address(str(answer)) for answer in answers_aaaa]
-        except DNSTimeout as e:
-            raise e
-        except DNSException as e:
-            logger.info(f'No AAAA record for "{hostname}": {e}')
+        max_timeout_retries = 3
+        _current_retries = 0
+        while _current_retries < max_timeout_retries:
+            _current_retries += 1
+            try:
+                answers_a = await self.dnsresolver.resolve(hostname, 'A')
+                resolved_ips += [ip_address(str(answer)) for answer in answers_a]
+            except DNSTimeout as e:
+                if _current_retries < max_timeout_retries:
+                    logger.info(f'DNS Timeout for "{hostname}" (A record), retrying.')
+                    await asyncio.sleep(1)
+                    continue
+                raise e
+            except DNSException as e:
+                logger.info(f'No A record for "{hostname}": {e}')
+            break
+
+        _current_retries = 0
+        while _current_retries < max_timeout_retries:
+            _current_retries += 1
+            try:
+                answers_aaaa = await self.dnsresolver.resolve(hostname, 'AAAA')
+                resolved_ips += [ip_address(str(answer)) for answer in answers_aaaa]
+            except DNSTimeout as e:
+                if _current_retries < max_timeout_retries:
+                    logger.info(f'DNS Timeout for "{hostname}" (AAAA record), retrying.')
+                    await asyncio.sleep(1)
+                    continue
+                raise e
+            except DNSException as e:
+                logger.info(f'No AAAA record for "{hostname}": {e}')
+            break
         return resolved_ips
