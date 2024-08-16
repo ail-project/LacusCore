@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lacuscore"
-version = "1.10.10"
+version = "1.10.11"
 description = "Core of Lacus, usable as a module"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
@@ -35,7 +35,7 @@ Sphinx = [
    {version = "^7.2", python = ">=3.9,<3.10", optional = true},
    {version = "^8", python = ">=3.10", optional = true}
 ]
-playwrightcapture = {extras = ["recaptcha"], version = "^1.25.12"}
+playwrightcapture = {extras = ["recaptcha"], version = "^1.25.13"}
 defang = "^0.5.3"
 ua-parser = "^0.18.0"
 redis = {version = "^5.0.8", extras = ["hiredis"]}
