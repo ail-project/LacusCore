@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple, Dict, Optional, Union, Any, Set
+from typing import Any
 
 from datetime import datetime, date
 
@@ -11,7 +11,7 @@ from redis import Redis
 
 class LacusCoreMonitoring():
 
-    def __init__(self, redis_connector: Redis):  # type: ignore[type-arg]
+    def __init__(self, redis_connector: Redis[str]):
         self.redis = redis_connector
 
     def check_redis_up(self) -> bool:

@@ -86,7 +86,7 @@ class LacusCore():
     :param max_retries: How many times should we re-try a capture if it failed.
     """
 
-    def __init__(self, redis_connector: Redis, /, *,  # type: ignore[type-arg]
+    def __init__(self, redis_connector: Redis[bytes], /, *,
                  max_capture_time: int=3600,
                  tor_proxy: str | None=None,
                  only_global_lookups: bool=True,
@@ -106,10 +106,6 @@ class LacusCore():
 
         # Enable new chromium headless by default.
         os.environ["PLAYWRIGHT_CHROMIUM_USE_HEADLESS_NEW"] = "1"
-
-        # NOTE: Remove in 1.8.* - clear old ongoing captures queue in case of need
-        if self.redis.type('lacus:ongoing') in ['set', b'set']:  # type: ignore[no-untyped-call]
-            self.redis.delete('lacus:ongoing')
 
     def check_redis_up(self) -> bool:
         """Check if redis is reachable"""
@@ -367,7 +363,7 @@ class LacusCore():
                 raise CaptureError(f'No capture settings for {uuid}')
 
             try:
-                to_capture = CaptureSettings(**{k.decode(): v.decode() for k, v in _to_capture.items()})
+                to_capture = CaptureSettings(**{k.decode(): v.decode() for k, v in _to_capture.items()})  # type: ignore[arg-type]
             except ValidationError as e:
                 logger.warning(f'Settings invalid: {e}')
                 raise CaptureSettingsError('Invalid settings', e)
@@ -709,7 +705,7 @@ class LacusCore():
                 # the value is bytes
                 to_return[key.decode()] = value  # type: ignore[literal-required]
             else:
-                logger.critical(f'Unexpected key in response: {key} - {value}')
+                logger.critical(f'Unexpected key in response: {key.decode()} - {value.decode()}')
         return to_return
 
     def clear_capture(self, uuid: str, reason: str) -> None:
