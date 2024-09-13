@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lacuscore"
-version = "1.10.12"
+version = "1.10.13"
 description = "Core of Lacus, usable as a module"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
@@ -35,13 +35,13 @@ Sphinx = [
    {version = "^7.2", python = ">=3.9,<3.10", optional = true},
    {version = "^8", python = ">=3.10", optional = true}
 ]
-playwrightcapture = {extras = ["recaptcha"], version = "^1.25.14"}
+playwrightcapture = {extras = ["recaptcha"], version = "^1.25.15"}
 defang = "^0.5.3"
 ua-parser = "^0.18.0"
 redis = {version = "^5.0.8", extras = ["hiredis"]}
 dnspython = "^2.6.1"
 async-timeout = {version = "^4.0.3", python = "<3.11"}
-pydantic = "^2.9.0"
+pydantic = "^2.9.1"
 eval-type-backport = {version = "^0.2.0", python = "<3.10"}
 
 [tool.poetry.extras]
@@ -57,7 +57,7 @@ ipython = [
     {version = "^8.18.0", python = ">=3.9"},
     {version = "^8.19.0", python = ">=3.10"}
 ]
-pytest = "^8.3.2"
+pytest = "^8.3.3"
 
 [build-system]
 requires = ["poetry_core"]
