@@ -6,33 +6,38 @@ from typing import Any
 
 from datetime import datetime, date
 
-from redis import Redis
+from glide import GlideClient, InfBound, RangeByScore, ScoreBoundary
 
 
 class LacusCoreMonitoring():
 
-    def __init__(self, redis_connector: Redis[str]):
+    def __init__(self, redis_connector: GlideClient):
         self.redis = redis_connector
 
-    def check_redis_up(self) -> bool:
-        return bool(self.redis.ping())
+    async def check_redis_up(self) -> bool:
+        return bool(await self.redis.ping())
 
-    def get_ongoing_captures(self) -> list[tuple[str, datetime]]:
-        return [(uuid, datetime.fromtimestamp(timestamp)) for uuid, timestamp in self.redis.zrevrangebyscore('lacus:ongoing', '+Inf', 0, withscores=True)]
+    async def get_ongoing_captures(self) -> list[tuple[str, datetime]]:
+        ongoing = await self.redis.zrange_withscores('lacus:ongoing', RangeByScore(InfBound.POS_INF, ScoreBoundary(0)))
+        return [(uuid.decode(), datetime.fromtimestamp(timestamp)) for uuid, timestamp in ongoing.items()]
 
-    def get_capture_settings(self, uuid: str) -> dict[str, str]:
-        return self.redis.hgetall(f'lacus:capture_settings:{uuid}')
+    async def get_capture_settings(self, uuid: str) -> dict[str, str]:
+        captures = await self.redis.hgetall(f'lacus:capture_settings:{uuid}')
+        return {k.decode(): v.decode() for k, v in captures.items()}
 
-    def get_enqueued_captures(self) -> list[tuple[str, float]]:
-        return self.redis.zrevrangebyscore('lacus:to_capture', '+Inf', '-Inf', withscores=True)
+    async def get_enqueued_captures(self) -> list[tuple[str, float]]:
+        enqueued = await self.redis.zrange_withscores('lacus:to_capture', RangeByScore(InfBound.POS_INF, InfBound.NEG_INF))
+        return [(uuid.decode(), timestamp) for uuid, timestamp in enqueued.items()]
 
-    def get_capture_result(self, uuid: str) -> str | None:
-        return self.redis.get(f'lacus:capture_results:{uuid}')
+    async def get_capture_result(self, uuid: str) -> str | None:
+        if result := await self.redis.get(f'lacus:capture_results:{uuid}'):
+            return result.decode()
+        return None
 
-    def get_capture_result_size(self, uuid: str) -> str | None:
-        return self.redis.memory_usage(f'lacus:capture_results:{uuid}')
+    # async def get_capture_result_size(self, uuid: str) -> str | None:
+    #     return await self.redis.memory_usage(f'lacus:capture_results:{uuid}')
 
-    def get_stats(self, d: datetime | date | str | None=None, /, *, cardinality_only: bool=False) -> dict[str, Any]:
+    async def get_stats(self, d: datetime | date | str | None=None, /, *, cardinality_only: bool=False) -> dict[str, Any]:
         if d is None:
             _date = date.today().isoformat()
         elif isinstance(d, str):
@@ -44,20 +49,20 @@ class LacusCoreMonitoring():
         else:
             raise Exception('Invalid type for date ({type(d)})')
         to_return: dict[str, list[tuple[str, float]] | int | set[str]] = {}
-        if errors := self.redis.zrevrangebyscore(f'stats:{_date}:errors', '+Inf', 0, withscores=True):
-            to_return['errors'] = errors
+        if errors := await self.redis.zrange_withscores(f'stats:{_date}:errors', RangeByScore(InfBound.POS_INF, ScoreBoundary(0))):
+            to_return['errors'] = [(uuid.decode(), timestamp) for uuid, timestamp in errors.items()]
         if cardinality_only:
-            if retry_failed := self.redis.scard(f'stats:{_date}:retry_failed'):
+            if retry_failed := await self.redis.scard(f'stats:{_date}:retry_failed'):
                 to_return['retry_failed'] = retry_failed
-            if retry_success := self.redis.scard(f'stats:{_date}:retry_success'):
+            if retry_success := await self.redis.scard(f'stats:{_date}:retry_success'):
                 to_return['retry_success'] = retry_success
-            if captures := self.redis.scard(f'stats:{_date}:captures'):
+            if captures := await self.redis.scard(f'stats:{_date}:captures'):
                 to_return['captures'] = captures
         else:
-            if retry_failed_list := self.redis.smembers(f'stats:{_date}:retry_failed'):
-                to_return['retry_failed'] = retry_failed_list
-            if retry_success_list := self.redis.smembers(f'stats:{_date}:retry_success'):
-                to_return['retry_success'] = retry_success_list
-            if captures_list := self.redis.smembers(f'stats:{_date}:captures'):
-                to_return['captures'] = captures_list
+            if retry_failed_list := await self.redis.smembers(f'stats:{_date}:retry_failed'):
+                to_return['retry_failed'] = {error.decode() for error in retry_failed_list}
+            if retry_success_list := await self.redis.smembers(f'stats:{_date}:retry_success'):
+                to_return['retry_success'] = {success.decode() for success in retry_success_list}
+            if captures_list := await self.redis.smembers(f'stats:{_date}:captures'):
+                to_return['captures'] = {capture.decode() for capture in captures_list}
         return to_return
