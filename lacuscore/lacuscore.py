@@ -19,7 +19,7 @@ from base64 import b64decode, b64encode
 from datetime import date, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from tempfile import NamedTemporaryFile
-from typing import Literal, Any, overload, cast, Iterator
+from typing import Literal, Any, overload, cast, AsyncIterator
 from uuid import uuid4
 from urllib.parse import urlsplit
 
@@ -30,9 +30,7 @@ from dns.exception import Timeout as DNSTimeout
 
 from playwrightcapture import Capture, PlaywrightCaptureException, InvalidPlaywrightParameter
 from pydantic import ValidationError
-from redis import Redis
-from redis.exceptions import ConnectionError as RedisConnectionError
-from redis.exceptions import DataError
+from glide import GlideClient, Transaction, ConditionalChange, ExpirySet, ExpiryType
 from ua_parser import user_agent_parser  # type: ignore[import-untyped]
 
 from . import task_logger
@@ -86,7 +84,7 @@ class LacusCore():
     :param max_retries: How many times should we re-try a capture if it failed.
     """
 
-    def __init__(self, redis_connector: Redis[bytes], /, *,
+    def __init__(self, redis_connector: GlideClient, /, *,
                  max_capture_time: int=3600,
                  tor_proxy: str | None=None,
                  only_global_lookups: bool=True,
@@ -107,68 +105,68 @@ class LacusCore():
         # Enable new chromium headless by default.
         os.environ["PLAYWRIGHT_CHROMIUM_USE_HEADLESS_NEW"] = "1"
 
-    def check_redis_up(self) -> bool:
+    async def check_redis_up(self) -> bool:
         """Check if redis is reachable"""
-        return bool(self.redis.ping())
+        return bool(await self.redis.ping())
 
     @overload
-    def enqueue(self, *, settings: dict[str, Any] | None=None) -> str:
+    async def enqueue(self, *, settings: dict[str, Any] | None=None) -> str:
         ...
 
     @overload
-    def enqueue(self, *,
-                url: str | None=None,
-                document_name: str | None=None, document: str | None=None,
-                depth: int=0,
-                browser: BROWSER | None=None, device_name: str | None=None,
-                user_agent: str | None=None,
-                proxy: str | dict[str, str] | None=None,
-                general_timeout_in_sec: int | None=None,
-                cookies: list[dict[str, Any]] | None=None,
-                headers: dict[str, str] | None=None,
-                http_credentials: dict[str, str] | None=None,
-                geolocation: dict[str, float] | None=None,
-                timezone_id: str | None=None,
-                locale: str | None=None,
-                color_scheme: str | None=None,
-                viewport: dict[str, int] | None=None,
-                referer: str | None=None,
-                rendered_hostname_only: bool=True,
-                with_favicon: bool=False,
-                allow_tracking: bool=False,
-                force: bool=False,
-                recapture_interval: int=300,
-                priority: int=0,
-                uuid: str | None=None
-                ) -> str:
+    async def enqueue(self, *,
+                      url: str | None=None,
+                      document_name: str | None=None, document: str | None=None,
+                      depth: int=0,
+                      browser: BROWSER | None=None, device_name: str | None=None,
+                      user_agent: str | None=None,
+                      proxy: str | dict[str, str] | None=None,
+                      general_timeout_in_sec: int | None=None,
+                      cookies: list[dict[str, Any]] | None=None,
+                      headers: dict[str, str] | None=None,
+                      http_credentials: dict[str, str] | None=None,
+                      geolocation: dict[str, float] | None=None,
+                      timezone_id: str | None=None,
+                      locale: str | None=None,
+                      color_scheme: str | None=None,
+                      viewport: dict[str, int] | None=None,
+                      referer: str | None=None,
+                      rendered_hostname_only: bool=True,
+                      with_favicon: bool=False,
+                      allow_tracking: bool=False,
+                      force: bool=False,
+                      recapture_interval: int=300,
+                      priority: int=0,
+                      uuid: str | None=None
+                      ) -> str:
         ...
 
-    def enqueue(self, *,
-                settings: dict[str, Any] | None=None,
-                url: str | None=None,
-                document_name: str | None=None, document: str | None=None,
-                depth: int=0,
-                browser: BROWSER | None=None, device_name: str | None=None,
-                user_agent: str | None=None,
-                proxy: str | dict[str, str] | None=None,
-                general_timeout_in_sec: int | None=None,
-                cookies: list[dict[str, Any]] | None=None,
-                headers: dict[str, str] | None=None,
-                http_credentials: dict[str, str] | None=None,
-                geolocation: dict[str, float] | None=None,
-                timezone_id: str | None=None,
-                locale: str | None=None,
-                color_scheme: str | None=None,
-                viewport: dict[str, int] | None=None,
-                referer: str | None=None,
-                rendered_hostname_only: bool=True,
-                with_favicon: bool=False,
-                allow_tracking: bool=False,
-                force: bool=False,
-                recapture_interval: int=300,
-                priority: int=0,
-                uuid: str | None=None
-                ) -> str:
+    async def enqueue(self, *,
+                      settings: dict[str, Any] | None=None,
+                      url: str | None=None,
+                      document_name: str | None=None, document: str | None=None,
+                      depth: int=0,
+                      browser: BROWSER | None=None, device_name: str | None=None,
+                      user_agent: str | None=None,
+                      proxy: str | dict[str, str] | None=None,
+                      general_timeout_in_sec: int | None=None,
+                      cookies: list[dict[str, Any]] | None=None,
+                      headers: dict[str, str] | None=None,
+                      http_credentials: dict[str, str] | None=None,
+                      geolocation: dict[str, float] | None=None,
+                      timezone_id: str | None=None,
+                      locale: str | None=None,
+                      color_scheme: str | None=None,
+                      viewport: dict[str, int] | None=None,
+                      referer: str | None=None,
+                      rendered_hostname_only: bool=True,
+                      with_favicon: bool=False,
+                      allow_tracking: bool=False,
+                      force: bool=False,
+                      recapture_interval: int=300,
+                      priority: int=0,
+                      uuid: str | None=None
+                      ) -> str:
         """Enqueue settings.
 
         :param settings: Settings as a dictionary
@@ -222,14 +220,14 @@ class LacusCore():
 
         hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
         if not force:
-            if (existing_uuid := self.redis.get(f'lacus:query_hash:{hash_query}')):
+            if (existing_uuid := await self.redis.get(f'lacus:query_hash:{hash_query}')):
                 if isinstance(existing_uuid, bytes):
                     return existing_uuid.decode()
                 return existing_uuid
 
         if uuid:
             # Make sure we do not already have a capture with that UUID
-            if self.get_capture_status(uuid) == CaptureStatus.UNKNOWN:
+            if await self.get_capture_status(uuid) == CaptureStatus.UNKNOWN:
                 perma_uuid = uuid
             else:
                 perma_uuid = str(uuid4())
@@ -237,14 +235,17 @@ class LacusCore():
         else:
             perma_uuid = str(uuid4())
 
-        p = self.redis.pipeline()
-        p.set(f'lacus:query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
-        p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=to_enqueue.redis_dump())
+        _expire = ExpirySet(ExpiryType.SEC, recapture_interval)
+        p = Transaction()
+        p.set(f'lacus:query_hash:{hash_query}', perma_uuid,
+              conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+              expiry=_expire)
+        p.hset(f'lacus:capture_settings:{perma_uuid}', to_enqueue.redis_dump())
         p.zadd('lacus:to_capture', {perma_uuid: priority if priority is not None else 0})
         try:
-            p.execute()
-        except DataError:
-            self.master_logger.exception(f'Unable to enqueue: {to_enqueue}')
+            await self.redis.exec(p)
+        except Exception as e:
+            self.master_logger.exception(f'Unable to enqueue ({e}): {to_enqueue}')
             raise CaptureSettingsError(f'Unable to enqueue: {to_enqueue}')
         return perma_uuid
 
@@ -264,14 +265,14 @@ class LacusCore():
         return encoded_capture
 
     @overload
-    def get_capture(self, uuid: str, *, decode: Literal[True]=True) -> CaptureResponse:
+    async def get_capture(self, uuid: str, *, decode: Literal[True]=True) -> CaptureResponse:
         ...
 
     @overload
-    def get_capture(self, uuid: str, *, decode: Literal[False]) -> CaptureResponseJson:
+    async def get_capture(self, uuid: str, *, decode: Literal[False]) -> CaptureResponseJson:
         ...
 
-    def get_capture(self, uuid: str, *, decode: bool=False) -> CaptureResponse | CaptureResponseJson:
+    async def get_capture(self, uuid: str, *, decode: bool=False) -> CaptureResponse | CaptureResponseJson:
         """Get the results of a capture, in a json compatible format or not
 
         :param uuid: The UUID if the capture (given by enqueue)
@@ -280,11 +281,11 @@ class LacusCore():
         :return: The capture, decoded or not.
         """
         to_return: CaptureResponse = {'status': CaptureStatus.UNKNOWN}
-        if self.redis.zscore('lacus:to_capture', uuid):
+        if await self.redis.zscore('lacus:to_capture', uuid):
             to_return['status'] = CaptureStatus.QUEUED
-        elif self.redis.zscore('lacus:ongoing', uuid) is not None:
+        elif await self.redis.zscore('lacus:ongoing', uuid) is not None:
             to_return['status'] = CaptureStatus.ONGOING
-        elif response := self._get_capture_response(uuid):
+        elif response := await self._get_capture_response(uuid):
             to_return['status'] = CaptureStatus.DONE
             to_return.update(response)
             if decode:
@@ -292,48 +293,45 @@ class LacusCore():
             return self._encode_response(to_return)
         return to_return
 
-    def get_capture_status(self, uuid: str) -> CaptureStatus:
+    async def get_capture_status(self, uuid: str) -> CaptureStatus:
         """Get the status of a capture
 
         :param uuid: The UUID if the capture (given by enqueue)
 
         :return: The status
         """
-        if self.redis.zscore('lacus:to_capture', uuid) is not None:
+        if await self.redis.zscore('lacus:to_capture', uuid) is not None:
             return CaptureStatus.QUEUED
-        elif self.redis.zscore('lacus:ongoing', uuid) is not None:
+        elif await self.redis.zscore('lacus:ongoing', uuid) is not None:
             return CaptureStatus.ONGOING
-        elif self.redis.exists(f'lacus:capture_settings:{uuid}'):
+        elif await self.redis.exists([f'lacus:capture_settings:{uuid}']):
             # we might have popped the UUID out of lacus:to_capture
             # but not pused it in lacus:ongoing yet
             return CaptureStatus.QUEUED
-        elif self.redis.exists(f'lacus:capture_results_hash:{uuid}'):
+        elif await self.redis.exists([f'lacus:capture_results_hash:{uuid}']):
             return CaptureStatus.DONE
-        elif self.redis.exists(f'lacus:capture_results:{uuid}'):
+        elif await self.redis.exists([f'lacus:capture_results:{uuid}']):
             # TODO: remove in 1.8.* - old format used last in 1.6, and kept no more than 10H in redis
             return CaptureStatus.DONE
         return CaptureStatus.UNKNOWN
 
-    def consume_queue(self, max_consume: int) -> Iterator[Task]:  # type: ignore[type-arg]
+    async def consume_queue(self, max_consume: int) -> AsyncIterator[Task[None]]:
         """Trigger the capture for captures with the highest priority. Up to max_consume.
 
         :yield: Captures.
         """
-        value: list[tuple[bytes, float]]
         while max_consume > 0:
-            value = self.redis.zpopmax('lacus:to_capture')
+            value = await self.redis.zpopmax('lacus:to_capture')
             if not value:
                 # Nothing to capture
                 break
-            if not value[0]:
-                continue
-            max_consume -= 1
-            uuid: str = value[0][0].decode()
-            priority: int = int(value[0][1])
-            logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
-            yield task_logger.create_task(self._capture(uuid, priority), name=uuid,
-                                          logger=logger,
-                                          message='Capture raised an uncaught exception')
+            for _uuid, priority in value.items():
+                max_consume -= 1
+                uuid = _uuid.decode()
+                logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
+                yield task_logger.create_task(self._capture(uuid, int(priority)), name=uuid,
+                                              logger=logger,
+                                              message='Capture raised an uncaught exception')
 
     async def _capture(self, uuid: str, priority: int) -> None:
         """Trigger a specific capture
@@ -341,14 +339,14 @@ class LacusCore():
         :param uuid: The UUID if the capture (given by enqueue)
         :param priority: Only for internal use, will decide on the priority of the capture if the try now fails.
         """
-        if self.redis.zscore('lacus:ongoing', uuid) is not None:
+        if await self.redis.zscore('lacus:ongoing', uuid) is not None:
             # the capture is already ongoing
             await asyncio.sleep(1)
             return
 
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
-        self.redis.zadd('lacus:ongoing', {uuid: time.time()})
-        stats_pipeline = self.redis.pipeline()
+        await self.redis.zadd('lacus:ongoing', {uuid: time.time()})
+        stats_pipeline = Transaction()
         today = date.today().isoformat()
 
         retry = False
@@ -356,7 +354,7 @@ class LacusCore():
             result: CaptureResponse = {}
             _to_capture: dict[bytes, Any] = {}
             url: str = ''
-            _to_capture = self.redis.hgetall(f'lacus:capture_settings:{uuid}')
+            _to_capture = await self.redis.hgetall(f'lacus:capture_settings:{uuid}')
 
             if not _to_capture:
                 result = {'error': f'No capture settings for {uuid}'}
@@ -468,7 +466,7 @@ class LacusCore():
 
             try:
                 logger.debug(f'Capturing {url}')
-                stats_pipeline.sadd(f'stats:{today}:captures', url)
+                stats_pipeline.sadd(f'stats:{today}:captures', [url])
                 async with Capture(
                         browser=browser_engine,
                         device_name=to_capture.device_name,
@@ -536,29 +534,28 @@ class LacusCore():
                 # PlaywrightCapture considers this capture elligible for a retry
                 logger.info('PlaywrightCapture considers it elligible for a retry.')
                 raise RetryCapture('PlaywrightCapture considers it elligible for a retry.')
-            elif self.redis.exists(f'lacus:capture_retry:{uuid}'):
+            elif await self.redis.exists([f'lacus:capture_retry:{uuid}']):
                 # this is a retry that worked
-                stats_pipeline.sadd(f'stats:{today}:retry_success', url)
+                stats_pipeline.sadd(f'stats:{today}:retry_success', [url])
         except RetryCapture:
             # Check if we already re-tried this capture
-            _current_retry = self.redis.get(f'lacus:capture_retry:{uuid}')
+            _current_retry = await self.redis.get(f'lacus:capture_retry:{uuid}')
             if _current_retry is None:
                 # No retry yet
                 logger.debug(f'Retrying {url} for the first time.')
                 retry = True
-                self.redis.setex(f'lacus:capture_retry:{uuid}',
-                                 self.max_capture_time * (self.max_retries + 10),
-                                 self.max_retries)
+                _expire = ExpirySet(ExpiryType.SEC, self.max_capture_time * (self.max_retries + 10))
+                await self.redis.set(f'lacus:capture_retry:{uuid}', str(self.max_retries), expiry=_expire)
             else:
                 current_retry = int(_current_retry.decode())
                 if current_retry > 0:
                     logger.debug(f'Retrying {url} for the {self.max_retries - current_retry + 1}th time.')
-                    self.redis.decr(f'lacus:capture_retry:{uuid}')
+                    await self.redis.decr(f'lacus:capture_retry:{uuid}')
                     retry = True
                 else:
                     error_msg = result['error'] if result.get('error') else 'Unknown error'
                     logger.info(f'Retried too many times {url}: {error_msg}')
-                    stats_pipeline.sadd(f'stats:{today}:retry_failed', url)
+                    stats_pipeline.sadd(f'stats:{today}:retry_failed', [url])
         except CaptureError:
             if not result:
                 result = {'error': "No result key, shouldn't happen"}
@@ -572,7 +569,7 @@ class LacusCore():
             result = {'error': msg}
             logger.exception(msg)
         else:
-            if start_time := self.redis.zscore('lacus:ongoing', uuid):
+            if start_time := await self.redis.zscore('lacus:ongoing', uuid):
                 runtime = time.time() - start_time
                 logger.info(f'Capture of {url} finished - Runtime: {runtime}s')
                 result['runtime'] = runtime
@@ -587,44 +584,44 @@ class LacusCore():
                 os.unlink(tmp_f.name)
 
             if retry:
-                if self.redis.zcard('lacus:to_capture') == 0:
+                if await self.redis.zcard('lacus:to_capture') == 0:
                     # Just wait a little bit before retrying
                     await asyncio.sleep(random.randint(5, 10))
-                p = self.redis.pipeline()
-                p.zrem('lacus:ongoing', uuid)
+                p = Transaction()
+                p.zrem('lacus:ongoing', [uuid])
                 p.zadd('lacus:to_capture', {uuid: priority - 1})
-                p.execute()
+                await self.redis.exec(p)
             else:
                 retry_redis_error = 3
                 while retry_redis_error > 0:
                     try:
-                        p = self.redis.pipeline()
+                        p = Transaction()
                         if result:
                             self._store_capture_response(p, uuid, result)
                         else:
                             logger.warning('Got no result at all for the capture.')
-                        p.delete(f'lacus:capture_settings:{uuid}')
-                        p.zrem('lacus:ongoing', uuid)
-                        p.execute()
+                        p.delete([f'lacus:capture_settings:{uuid}'])
+                        p.zrem('lacus:ongoing', [uuid])
+                        await self.redis.exec(p)
                         break
-                    except RedisConnectionError as e:
+                    except Exception as e:
                         logger.warning(f'Unable to store capture result - Redis Connection Error: {e}')
                         retry_redis_error -= 1
                         await asyncio.sleep(random.randint(5, 10))
                 else:
-                    self.redis.zrem('lacus:ongoing', uuid)
+                    await self.redis.zrem('lacus:ongoing', [uuid])
                     stats_pipeline.zincrby(f'stats:{today}:errors', 1, 'Redis Connection')
                     logger.critical('Unable to connect to redis and to push the result of the capture.')
 
             # Expire stats in 10 days
-            expire_time = timedelta(days=10)
+            expire_time = int(timedelta(days=10).total_seconds())
             stats_pipeline.expire(f'stats:{today}:errors', expire_time)
             stats_pipeline.expire(f'stats:{today}:retry_failed', expire_time)
             stats_pipeline.expire(f'stats:{today}:retry_success', expire_time)
             stats_pipeline.expire(f'stats:{today}:captures', expire_time)
-            stats_pipeline.execute()
+            await self.redis.exec(stats_pipeline)
 
-    def _store_capture_response(self, pipeline: Redis, capture_uuid: str, results: CaptureResponse,   # type: ignore[type-arg]
+    def _store_capture_response(self, pipeline: Transaction, capture_uuid: str, results: CaptureResponse,
                                 root_key: str | None=None) -> None:
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': capture_uuid})
         if root_key is None:
@@ -660,19 +657,19 @@ class LacusCore():
             hash_to_set[key] = results[key]  # type: ignore[literal-required]
 
         if hash_to_set:
-            pipeline.hset(root_key, mapping=hash_to_set)  # type: ignore[arg-type]
+            pipeline.hset(root_key, hash_to_set)  # type: ignore[arg-type]
             # Make sure the key expires
             pipeline.expire(root_key, 36000)
         else:
             logger.critical(f'Nothing to store (Hash: {hash_to_set}) for {root_key}')
 
-    def _get_capture_response(self, capture_uuid: str, root_key: str | None=None) -> CaptureResponse | None:
+    async def _get_capture_response(self, capture_uuid: str, root_key: str | None=None) -> CaptureResponse | None:
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': capture_uuid})
         if root_key is None:
             root_key = f'lacus:capture_results_hash:{capture_uuid}'
 
-            if not self.redis.exists(root_key):
-                if old_response := self.redis.get(f'lacus:capture_results:{capture_uuid}'):
+            if not await self.redis.exists([root_key]):
+                if old_response := await self.redis.get(f'lacus:capture_results:{capture_uuid}'):
                     # TODO: remove in 1.8.* - old format used last in 1.6, and kept no more than 10H in redis
                     return pickle.loads(zlib.decompress(old_response))
                 return None
@@ -680,7 +677,8 @@ class LacusCore():
         # New format and capture done
 
         to_return: CaptureResponse = {}
-        for key, value in self.redis.hgetall(root_key).items():
+        results = await self.redis.hgetall(root_key)
+        for key, value in results.items():
             if key == b'har':
                 to_return['har'] = pickle.loads(value)
             elif key == b'cookies':
@@ -690,7 +688,7 @@ class LacusCore():
             elif key == b'children':
                 to_return['children'] = []
                 for child_root_key in sorted(pickle.loads(value)):
-                    if child := self._get_capture_response(capture_uuid, child_root_key):
+                    if child := await self._get_capture_response(capture_uuid, child_root_key):
                         to_return['children'].append(child)  # type: ignore[union-attr]
             elif key in [b'status']:
                 # The value in an int
@@ -708,13 +706,13 @@ class LacusCore():
                 logger.critical(f'Unexpected key in response: {key.decode()} - {value.decode()}')
         return to_return
 
-    def clear_capture(self, uuid: str, reason: str) -> None:
+    async def clear_capture(self, uuid: str, reason: str) -> None:
         '''Remove a capture from the list, shouldn't happen unless it is in error'''
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
-        capture_status = self.get_capture_status(uuid)
+        capture_status = await self.get_capture_status(uuid)
         if capture_status == CaptureStatus.ONGOING:
             # Check when it was started.
-            if start_time := self.redis.zscore('lacus:ongoing', uuid):
+            if start_time := await self.redis.zscore('lacus:ongoing', uuid):
                 if start_time > time.time() - self.max_capture_time * 1.1:
                     # The capture started recently, wait before clearing it.
                     logger.warning('The capture is (probably) still going, not clearing.')
@@ -724,11 +722,11 @@ class LacusCore():
             return
         logger.warning(f'Clearing capture: {reason}')
         result: CaptureResponse = {'error': reason}
-        p = self.redis.pipeline()
+        p = Transaction()
         self._store_capture_response(p, uuid, result)
-        p.delete(f'lacus:capture_settings:{uuid}')
-        p.zrem('lacus:ongoing', uuid)
-        p.execute()
+        p.delete([f'lacus:capture_settings:{uuid}'])
+        p.zrem('lacus:ongoing', [uuid])
+        await self.redis.exec(p)
 
     async def __get_ips(self, logger: LacusCoreLogAdapter, hostname: str) -> list[IPv4Address | IPv6Address]:
         # We need to use dnspython for resolving because socket.getaddrinfo will sometimes be stuck for ~10s
