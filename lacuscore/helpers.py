@@ -99,6 +99,7 @@ class CaptureSettings(BaseModel):
     timezone_id: str | None = None
     locale: str | None = None
     color_scheme: str | None = None
+    java_script_enabled: bool = True
     viewport: dict[str, int] | None = None
     referer: str | None = None
     with_favicon: bool = True

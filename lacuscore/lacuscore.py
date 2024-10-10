@@ -131,6 +131,7 @@ class LacusCore():
                 timezone_id: str | None=None,
                 locale: str | None=None,
                 color_scheme: str | None=None,
+                java_script_enabled: bool=True,
                 viewport: dict[str, int] | None=None,
                 referer: str | None=None,
                 rendered_hostname_only: bool=True,
@@ -159,6 +160,7 @@ class LacusCore():
                 timezone_id: str | None=None,
                 locale: str | None=None,
                 color_scheme: str | None=None,
+                java_script_enabled: bool=True,
                 viewport: dict[str, int] | None=None,
                 referer: str | None=None,
                 rendered_hostname_only: bool=True,
@@ -189,6 +191,7 @@ class LacusCore():
         :param timezone_id: The timezone of the browser to pass to the capture
         :param locale: The locale of the browser to pass to the capture
         :param color_scheme: The prefered color scheme of the browser to pass to the capture
+        :param java_script_enabled: If False, javascript will be disabled when rendering the page
         :param viewport: The viewport of the browser used for capturing
         :param referer: The referer URL for the capture
         :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
@@ -210,8 +213,8 @@ class LacusCore():
                         'cookies': cookies, 'headers': headers,
                         'http_credentials': http_credentials, 'geolocation': geolocation,
                         'timezone_id': timezone_id, 'locale': locale,
-                        'color_scheme': color_scheme, 'viewport': viewport,
-                        'referer': referer, 'with_favicon': with_favicon,
+                        'color_scheme': color_scheme, 'java_script_enabled': java_script_enabled,
+                        'viewport': viewport, 'referer': referer, 'with_favicon': with_favicon,
                         'allow_tracking': allow_tracking}
 
         try:
@@ -486,6 +489,7 @@ class LacusCore():
                     capture.timezone_id = to_capture.timezone_id  # type: ignore[assignment]
                     capture.locale = to_capture.locale  # type: ignore[assignment]
                     capture.color_scheme = to_capture.color_scheme  # type: ignore[assignment]
+                    capture.java_script_enabled = to_capture.java_script_enabled
 
                     # make sure the initialization doesn't take too long
                     init_timeout = max(self.max_capture_time / 10, 5)
