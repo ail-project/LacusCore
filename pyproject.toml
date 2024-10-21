@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lacuscore"
-version = "1.11.1"
+version = "1.11.2"
 description = "Core of Lacus, usable as a module"
 authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
 license = "BSD-3-Clause"
@@ -23,6 +23,7 @@ classifiers = [
     'Programming Language :: Python :: 3.10',
     'Programming Language :: Python :: 3.11',
     'Programming Language :: Python :: 3.12',
+    'Programming Language :: Python :: 3.13',
     'Topic :: Security',
     'Topic :: Internet',
 ]
