@@ -35,7 +35,7 @@ Sphinx = [
    {version = "^7.2", python = ">=3.9,<3.10", optional = true},
    {version = "^8", python = ">=3.10", optional = true}
 ]
-playwrightcapture = {extras = ["recaptcha"], version = "^1.26.1"}
+playwrightcapture = {extras = ["recaptcha"], version = "^1.26.2"}
 defang = "^0.5.3"
 ua-parser = "^0.18.0"
 redis = {version = "^5.1.1", extras = ["hiredis"]}
@@ -51,10 +51,10 @@ eval-type-backport = {version = "^0.2.0", python = "<3.10"}
 docs = ["Sphinx"]
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^1.12.0"
+mypy = "^1.12.1"
 types-redis = {version = "^4.6.0.20241004"}
-types-requests = "^2.32.0.20240914"
-types-beautifulsoup4 = "^4.12.0.20240907"
+types-requests = "^2.32.0.20241016"
+types-beautifulsoup4 = "^4.12.0.20241020"
 ipython = [
     {version = "<8.13.0", python = "<3.9"},
     {version = "^8.18.0", python = ">=3.9"},
