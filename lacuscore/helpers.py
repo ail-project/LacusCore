@@ -107,6 +107,7 @@ class CaptureSettings(BaseModel):
     force: bool = False
     recapture_interval: int = 300
     priority: int = 0
+    max_retries: int | None = None
     uuid: str | None = None
 
     depth: int = 0

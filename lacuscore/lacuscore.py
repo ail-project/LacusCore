@@ -137,6 +137,7 @@ class LacusCore():
                 rendered_hostname_only: bool=True,
                 with_favicon: bool=False,
                 allow_tracking: bool=False,
+                max_retries: int | None=None,
                 force: bool=False,
                 recapture_interval: int=300,
                 priority: int=0,
@@ -166,6 +167,7 @@ class LacusCore():
                 rendered_hostname_only: bool=True,
                 with_favicon: bool=False,
                 allow_tracking: bool=False,
+                max_retries: int | None=None,
                 force: bool=False,
                 recapture_interval: int=300,
                 priority: int=0,
@@ -197,6 +199,8 @@ class LacusCore():
         :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
         :param with_favicon: If True, PlaywrightCapture will attempt to get the potential favicons for the rendered URL. It is a dirty trick, see this issue for details: https://github.com/Lookyloo/PlaywrightCapture/issues/45
         :param allow_tracking: If True, PlaywrightCapture will attempt to click through the cookie banners. It is totally dependent on the framework used on the website.
+        :param max_retries: The maximum anount of retries for this capture
+
         :param force: Force recapture, even if the same one was already done within the recapture_interval
         :param recapture_interval: The time the enqueued settings are kept in memory to avoid duplicates
         :param priority: The priority of the capture
@@ -215,7 +219,7 @@ class LacusCore():
                         'timezone_id': timezone_id, 'locale': locale,
                         'color_scheme': color_scheme, 'java_script_enabled': java_script_enabled,
                         'viewport': viewport, 'referer': referer, 'with_favicon': with_favicon,
-                        'allow_tracking': allow_tracking}
+                        'allow_tracking': allow_tracking, 'max_retries': max_retries}
 
         try:
             to_enqueue = CaptureSettings(**settings)
@@ -469,6 +473,9 @@ class LacusCore():
                         cookie['path'] = '/'
                     cookies.append(cookie)
 
+            # If the class is initialized with max_retries below the one provided in the settings, we use the lowest value
+            max_retries = min([to_capture.max_retries, self.max_retries]) if to_capture.max_retries is not None else self.max_retries
+
             try:
                 logger.debug(f'Capturing {url}')
                 stats_pipeline.sadd(f'stats:{today}:captures', url)
@@ -544,7 +551,7 @@ class LacusCore():
                 # this is a retry that worked
                 stats_pipeline.sadd(f'stats:{today}:retry_success', url)
         except RetryCapture:
-            if self.max_retries == 0:
+            if max_retries == 0:
                 error_msg = result['error'] if result.get('error') else 'Unknown error'
                 logger.info(f'Retries disabled for {url}: {error_msg}')
             else:
@@ -555,12 +562,12 @@ class LacusCore():
                     logger.debug(f'Retrying {url} for the first time.')
                     retry = True
                     self.redis.setex(f'lacus:capture_retry:{uuid}',
-                                     self.max_capture_time * (self.max_retries + 10),
-                                     self.max_retries - 1)
+                                     self.max_capture_time * (max_retries + 10),
+                                     max_retries - 1)
                 else:
                     current_retry = int(_current_retry.decode())
                     if current_retry > 0:
-                        logger.debug(f'Retrying {url} for the {self.max_retries - current_retry + 1} time.')
+                        logger.debug(f'Retrying {url} for the {max_retries - current_retry + 1} time.')
                         self.redis.decr(f'lacus:capture_retry:{uuid}')
                         retry = True
                     else:
