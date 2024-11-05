@@ -80,7 +80,7 @@ class LacusCore():
     """Capture URLs or web enabled documents using PlaywrightCapture.
 
     :param redis_connector: Pre-configured connector to a redis instance.
-    :param max_capture time: If the capture takes more than that time, break (in seconds)
+    :param max_capture_time: If the capture takes more than that time, break (in seconds)
     :param tor_proxy: URL to a SOCKS 5 tor proxy. If you have tor installed, this is the default: socks5://127.0.0.1:9050.
     :param only_global_lookups: Discard captures that point to non-public IPs.
     :param max_retries: How many times should we re-try a capture if it failed.
@@ -544,25 +544,29 @@ class LacusCore():
                 # this is a retry that worked
                 stats_pipeline.sadd(f'stats:{today}:retry_success', url)
         except RetryCapture:
-            # Check if we already re-tried this capture
-            _current_retry = self.redis.get(f'lacus:capture_retry:{uuid}')
-            if _current_retry is None:
-                # No retry yet
-                logger.debug(f'Retrying {url} for the first time.')
-                retry = True
-                self.redis.setex(f'lacus:capture_retry:{uuid}',
-                                 self.max_capture_time * (self.max_retries + 10),
-                                 self.max_retries)
+            if self.max_retries == 0:
+                error_msg = result['error'] if result.get('error') else 'Unknown error'
+                logger.info(f'Retries disabled for {url}: {error_msg}')
             else:
-                current_retry = int(_current_retry.decode())
-                if current_retry > 0:
-                    logger.debug(f'Retrying {url} for the {self.max_retries - current_retry + 1}th time.')
-                    self.redis.decr(f'lacus:capture_retry:{uuid}')
+                # Check if we already re-tried this capture
+                _current_retry = self.redis.get(f'lacus:capture_retry:{uuid}')
+                if _current_retry is None:
+                    # No retry yet
+                    logger.debug(f'Retrying {url} for the first time.')
                     retry = True
+                    self.redis.setex(f'lacus:capture_retry:{uuid}',
+                                     self.max_capture_time * (self.max_retries + 10),
+                                     self.max_retries - 1)
                 else:
-                    error_msg = result['error'] if result.get('error') else 'Unknown error'
-                    logger.info(f'Retried too many times {url}: {error_msg}')
-                    stats_pipeline.sadd(f'stats:{today}:retry_failed', url)
+                    current_retry = int(_current_retry.decode())
+                    if current_retry > 0:
+                        logger.debug(f'Retrying {url} for the {self.max_retries - current_retry + 1} time.')
+                        self.redis.decr(f'lacus:capture_retry:{uuid}')
+                        retry = True
+                    else:
+                        error_msg = result['error'] if result.get('error') else 'Unknown error'
+                        logger.info(f'Retried too many times {url}: {error_msg}')
+                        stats_pipeline.sadd(f'stats:{today}:retry_failed', url)
         except CaptureError:
             if not result:
                 result = {'error': "No result key, shouldn't happen"}
