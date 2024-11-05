@@ -6,7 +6,8 @@ import json
 
 from enum import IntEnum, unique
 from logging import LoggerAdapter
-from typing import MutableMapping, Any, TypedDict, Mapping, Literal
+from typing import Any, TypedDict, Literal
+from collections.abc import MutableMapping, Mapping
 
 from defang import refang  # type: ignore[import-untyped]
 from pydantic import BaseModel, field_validator, model_validator, ValidationError

@@ -19,7 +19,8 @@ from base64 import b64decode, b64encode
 from datetime import date, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from tempfile import NamedTemporaryFile
-from typing import Literal, Any, overload, cast, Iterator
+from typing import Literal, Any, overload, cast
+from collections.abc import Iterator
 from uuid import uuid4
 from urllib.parse import urlsplit
 
@@ -475,7 +476,6 @@ class LacusCore():
 
             # If the class is initialized with max_retries below the one provided in the settings, we use the lowest value
             max_retries = min([to_capture.max_retries, self.max_retries]) if to_capture.max_retries is not None else self.max_retries
-
             try:
                 logger.debug(f'Capturing {url}')
                 stats_pipeline.sadd(f'stats:{today}:captures', url)

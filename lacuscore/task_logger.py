@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Coroutine, Optional, TypeVar, Tuple
+from typing import Any, TypeVar
+from collections.abc import Coroutine
 
 import asyncio
 import functools
@@ -18,12 +19,12 @@ def create_task(
     coroutine: Coroutine[Any, Any, T],
     *,
     name: str,
-    logger: 'LacusCoreLogAdapter',
+    logger: LacusCoreLogAdapter,
     message: str,
-    message_args: Tuple[Any, ...] = (),
-    loop: Optional[asyncio.AbstractEventLoop] = None,
+    message_args: tuple[Any, ...] = (),
+    loop: asyncio.AbstractEventLoop | None = None,
 
-) -> 'asyncio.Task[T]':  # This type annotation has to be quoted for Python < 3.9, see https://www.python.org/dev/peps/pep-0585/
+) -> asyncio.Task[T]:  # This type annotation has to be quoted for Python < 3.9, see https://www.python.org/dev/peps/pep-0585/
     '''
     This helper function wraps a ``loop.create_task(coroutine())`` call and ensures there is
     an exception handler added to the resulting task. If the task raises an exception it is logged
@@ -42,9 +43,9 @@ def create_task(
 def _handle_task_result(
     task: asyncio.Task[Any],
     *,
-    logger: 'LacusCoreLogAdapter',
+    logger: LacusCoreLogAdapter,
     message: str,
-    message_args: Tuple[Any, ...] = (),
+    message_args: tuple[Any, ...] = (),
 ) -> None:
     try:
         task.result()
