@@ -376,6 +376,10 @@ class LacusCore():
                 logger.warning(f'Settings invalid: {e}')
                 raise CaptureSettingsError('Invalid settings', e)
 
+            # If the class is initialized with max_retries below the one provided in the settings, we use the lowest value
+            # NOTE: make sure the variable is initialized *before* we raise any RetryCapture
+            max_retries = min([to_capture.max_retries, self.max_retries]) if to_capture.max_retries is not None else self.max_retries
+
             if to_capture.document:
                 # we do not have a URL yet.
                 document_as_bytes = b64decode(to_capture.document)
@@ -474,8 +478,6 @@ class LacusCore():
                         cookie['path'] = '/'
                     cookies.append(cookie)
 
-            # If the class is initialized with max_retries below the one provided in the settings, we use the lowest value
-            max_retries = min([to_capture.max_retries, self.max_retries]) if to_capture.max_retries is not None else self.max_retries
             try:
                 logger.debug(f'Capturing {url}')
                 stats_pipeline.sadd(f'stats:{today}:captures', url)
