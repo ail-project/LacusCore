@@ -620,6 +620,8 @@ class LacusCore():
                             self._store_capture_response(p, uuid, result)
                         else:
                             logger.warning('Got no result at all for the capture.')
+                            result = {'error': 'No result at all for the capture, Playwright failed.'}
+                            self._store_capture_response(p, uuid, result)
                         p.delete(f'lacus:capture_settings:{uuid}')
                         p.zrem('lacus:ongoing', uuid)
                         p.execute()
@@ -765,7 +767,7 @@ class LacusCore():
                     continue
                 raise e
             except DNSException as e:
-                logger.info(f'No A record for "{hostname}": {e}')
+                logger.debug(f'No A record for "{hostname}": {e}')
             break
 
         _current_retries = 0
@@ -781,6 +783,6 @@ class LacusCore():
                     continue
                 raise e
             except DNSException as e:
-                logger.info(f'No AAAA record for "{hostname}": {e}')
+                logger.debug(f'No AAAA record for "{hostname}": {e}')
             break
         return resolved_ips
