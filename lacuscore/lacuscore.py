@@ -82,6 +82,7 @@ class LacusCore():
 
     :param redis_connector: Pre-configured connector to a redis instance.
     :param max_capture_time: If the capture takes more than that time, break (in seconds)
+    :param expire_results: The capture results are stored in redis. Expire them after they are done (in seconds).
     :param tor_proxy: URL to a SOCKS 5 tor proxy. If you have tor installed, this is the default: socks5://127.0.0.1:9050.
     :param only_global_lookups: Discard captures that point to non-public IPs.
     :param max_retries: How many times should we re-try a capture if it failed.
@@ -89,6 +90,7 @@ class LacusCore():
 
     def __init__(self, redis_connector: Redis[bytes], /, *,
                  max_capture_time: int=3600,
+                 expire_results: int=36000,
                  tor_proxy: str | None=None,
                  only_global_lookups: bool=True,
                  max_retries: int=3,
@@ -97,6 +99,7 @@ class LacusCore():
         self.master_logger.setLevel(loglevel)
         self.redis = redis_connector
         self.max_capture_time = max_capture_time
+        self.expire_results = expire_results
         self.tor_proxy = tor_proxy
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
@@ -681,7 +684,7 @@ class LacusCore():
         if hash_to_set:
             pipeline.hset(root_key, mapping=hash_to_set)  # type: ignore[arg-type]
             # Make sure the key expires
-            pipeline.expire(root_key, 36000)
+            pipeline.expire(root_key, self.expire_results)
         else:
             logger.critical(f'Nothing to store (Hash: {hash_to_set}) for {root_key}')
 
