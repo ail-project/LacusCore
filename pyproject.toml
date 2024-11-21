@@ -40,7 +40,7 @@ ua-parser = "^0.18.0"
 redis = {version = "^5.2.0", extras = ["hiredis"]}
 dnspython = {version = "^2.7.0", python = ">=3.9"}
 async-timeout = {version = "^4.0.3", python = "<3.11"}
-pydantic = "^2.9.2"
+pydantic = "^2.10.0"
 eval-type-backport = {version = "^0.2.0", python = "<3.10"}
 
 [tool.poetry.extras]
