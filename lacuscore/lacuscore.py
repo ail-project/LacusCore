@@ -108,9 +108,6 @@ class LacusCore():
         self.dnsresolver.timeout = 2
         self.dnsresolver.lifetime = 3
 
-        # Enable new chromium headless by default.
-        os.environ["PLAYWRIGHT_CHROMIUM_USE_HEADLESS_NEW"] = "1"
-
     def check_redis_up(self) -> bool:
         """Check if redis is reachable"""
         return bool(self.redis.ping())
