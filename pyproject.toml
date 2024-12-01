@@ -36,11 +36,11 @@ Sphinx = [
 ]
 playwrightcapture = {extras = ["recaptcha"], version = "^1.27.3"}
 defang = "^0.5.3"
-ua-parser = "^0.18.0"
+ua-parser = {extras = ["regex"], version = "^1.0.0"}
 redis = {version = "^5.2.0", extras = ["hiredis"]}
 dnspython = {version = "^2.7.0", python = ">=3.9"}
 async-timeout = {version = "^4.0.3", python = "<3.11"}
-pydantic = "^2.10.1"
+pydantic = "^2.10.2"
 eval-type-backport = {version = "^0.2.0", python = "<3.10"}
 
 [tool.poetry.extras]
@@ -55,7 +55,7 @@ ipython = [
     {version = "^8.18.0", python = ">=3.9"},
     {version = "^8.19.0", python = ">=3.10"}
 ]
-pytest = "^8.3.3"
+pytest = "^8.3.4"
 
 [build-system]
 requires = ["poetry_core"]

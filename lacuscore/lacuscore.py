@@ -24,6 +24,8 @@ from collections.abc import Iterator
 from uuid import uuid4
 from urllib.parse import urlsplit
 
+import ua_parser
+
 from dns.resolver import Cache
 from dns.asyncresolver import Resolver
 from dns.exception import DNSException
@@ -34,7 +36,6 @@ from pydantic import ValidationError
 from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import DataError
-from ua_parser import user_agent_parser  # type: ignore[import-untyped]
 
 from . import task_logger
 from .helpers import (
@@ -448,8 +449,8 @@ class LacusCore():
             if to_capture.browser:
                 browser_engine = to_capture.browser
             elif to_capture.user_agent:
-                parsed_string = user_agent_parser.ParseUserAgent(to_capture.user_agent)
-                browser_family = parsed_string['family'].lower()
+                parsed_string = ua_parser.parse(to_capture.user_agent).with_defaults()
+                browser_family = parsed_string.user_agent.family.lower()
                 if browser_family.startswith('chrom'):
                     browser_engine = 'chromium'
                 elif browser_family.startswith('firefox'):
