@@ -34,7 +34,7 @@ Sphinx = [
    {version = "^7.2", python = ">=3.9,<3.10", optional = true},
    {version = "^8", python = ">=3.10", optional = true}
 ]
-playwrightcapture = {extras = ["recaptcha"], version = "^1.27.3"}
+playwrightcapture = {extras = ["recaptcha"], version = "^1.27.4"}
 defang = "^0.5.3"
 ua-parser = {extras = ["regex"], version = "^1.0.0"}
 redis = {version = "^5.2.0", extras = ["hiredis"]}
