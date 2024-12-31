@@ -37,7 +37,7 @@ playwrightcapture = {extras = ["recaptcha"], version = "^1.27.5"}
 defang = "^0.5.3"
 ua-parser = {extras = ["regex"], version = "^1.0.0"}
 redis = {version = "^5.2.1", extras = ["hiredis"]}
-dnspython = {version = "^2.7.0", python = ">=3.9"}
+dnspython = "^2.7.0"
 async-timeout = {version = "^4.0.3", python = "<3.11"}
 pydantic = "^2.10.4"
 eval-type-backport = {version = "^0.2.0", python = "<3.10"}
@@ -46,7 +46,7 @@ eval-type-backport = {version = "^0.2.0", python = "<3.10"}
 docs = ["Sphinx"]
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^1.14.0"
+mypy = "^1.14.1"
 types-redis = {version = "^4.6.0.20241004"}
 types-requests = "^2.32.0.20241016"
 types-beautifulsoup4 = "^4.12.0.20241020"
