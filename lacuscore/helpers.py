@@ -9,7 +9,7 @@ from logging import LoggerAdapter
 from typing import Any, TypedDict, Literal
 from collections.abc import MutableMapping, Mapping
 
-from defang import refang  # type: ignore[import-untyped]
+from defang import refang
 from pydantic import BaseModel, field_validator, model_validator, ValidationError
 from pydantic_core import from_json
 
@@ -149,7 +149,8 @@ class CaptureSettings(BaseModel):
     @classmethod
     def load_url(cls, url: str | None) -> str | None:
         if isinstance(url, str):
-            _url = refang(url)  # In case we get a defanged url at this stage.
+            #  In case we get a defanged url at this stage.
+            _url = refang(url)  # type: ignore[no-untyped-call]
             if (not _url.lower().startswith('data:')
                     and not _url.lower().startswith('http:')
                     and not _url.lower().startswith('https:')

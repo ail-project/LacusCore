@@ -1,60 +1,52 @@
-[tool.poetry]
+[project]
 name = "lacuscore"
 version = "1.12.7"
 description = "Core of Lacus, usable as a module"
-authors = ["Raphaël Vinot <raphael.vinot@circl.lu>"]
+authors = [
+    {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
+]
 license = "BSD-3-Clause"
 repository = "https://github.com/ail-project/LacusCore"
 documentation = "https://lacuscore.readthedocs.io/en/latest/"
-
 readme = "README.md"
+requires-python = ">=3.9,<4.0"
 
+dynamic = [ "classifiers" ]
+
+dependencies = [
+    "requests (>=2.32.3)",
+    "playwrightcapture [recaptcha] (>=1.27.5)",
+    "defang (>=0.5.3)",
+    "ua-parser [regex] (>=1.0.0)",
+    "redis [hiredis] (>=5.2.1)",
+    "dnspython (>=2.7.0)",
+    "async-timeout (>=4.0.3) ; python_version < '3.11'",
+    "pydantic (>=2.10.4)",
+    "eval-type-backport (>=0.2.0) ; python_version < '3.10'"
+]
+
+[tool.poetry]
 classifiers = [
-    'License :: OSI Approved :: BSD License',
     'Development Status :: 5 - Production/Stable',
     'Environment :: Console',
     'Operating System :: POSIX :: Linux',
     'Intended Audience :: Science/Research',
     'Intended Audience :: Telecommunications Industry',
     'Intended Audience :: Information Technology',
-    'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.9',
-    'Programming Language :: Python :: 3.10',
-    'Programming Language :: Python :: 3.11',
-    'Programming Language :: Python :: 3.12',
-    'Programming Language :: Python :: 3.13',
     'Topic :: Security',
     'Topic :: Internet',
 ]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-requests = "^2.32.3"
-Sphinx = [
-   {version = "^8", python = ">=3.10", optional = true}
-]
-playwrightcapture = {extras = ["recaptcha"], version = "^1.27.5"}
-defang = "^0.5.3"
-ua-parser = {extras = ["regex"], version = "^1.0.0"}
-redis = {version = "^5.2.1", extras = ["hiredis"]}
-dnspython = "^2.7.0"
-async-timeout = {version = "^4.0.3", python = "<3.11"}
-pydantic = "^2.10.4"
-eval-type-backport = {version = "^0.2.0", python = "<3.10"}
-
-[tool.poetry.extras]
-docs = ["Sphinx"]
+[project.optional-dependencies]
+docs = ["Sphinx (>=8) ; python_version >= '3.10'"]
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.14.1"
 types-redis = {version = "^4.6.0.20241004"}
 types-requests = "^2.32.0.20241016"
 types-beautifulsoup4 = "^4.12.0.20241020"
-ipython = [
-    {version = "^8.19.0", python = ">=3.10"}
-]
 pytest = "^8.3.4"
 
 [build-system]
-requires = ["poetry_core"]
+requires = ["poetry-core>=2.0"]
 build-backend = "poetry.core.masonry.api"
