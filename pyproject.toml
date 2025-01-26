@@ -1,6 +1,6 @@
 [project]
 name = "lacuscore"
-version = "1.12.7"
+version = "1.12.8"
 description = "Core of Lacus, usable as a module"
 authors = [
     {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
@@ -15,15 +15,20 @@ dynamic = [ "classifiers" ]
 
 dependencies = [
     "requests (>=2.32.3)",
-    "playwrightcapture [recaptcha] (>=1.27.5)",
+    "playwrightcapture [recaptcha] (>=1.27.6)",
     "defang (>=0.5.3)",
     "ua-parser [regex] (>=1.0.0)",
     "redis [hiredis] (>=5.2.1)",
     "dnspython (>=2.7.0)",
-    "async-timeout (>=4.0.3) ; python_version < '3.11'",
-    "pydantic (>=2.10.4)",
-    "eval-type-backport (>=0.2.0) ; python_version < '3.10'"
+    "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
+    "pydantic (>=2.10.6)",
+    "eval-type-backport (>=0.2.2) ; python_version < \"3.10\""
 ]
+
+[project.urls]
+Repository = "https://github.com/Lookyloo/LacusCore"
+Issues = "https://github.com/Lookyloo/LacusCore/issues"
+Documentation = "https://lacuscore.readthedocs.io/en/latest/"
 
 [tool.poetry]
 classifiers = [
@@ -38,7 +43,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-docs = ["Sphinx (>=8) ; python_version >= '3.10'"]
+docs = ["Sphinx (>=8.1.3) ; python_version >= \"3.10\""]
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.14.1"
