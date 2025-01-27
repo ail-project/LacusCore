@@ -4,6 +4,9 @@ build:
   tools:
     python: "3"
 
+sphinx:
+  configuration: docs/source/conf.py
+
 python:
   install:
       - method: pip
