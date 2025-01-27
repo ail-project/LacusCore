@@ -26,8 +26,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/Lookyloo/LacusCore"
-Issues = "https://github.com/Lookyloo/LacusCore/issues"
+Repository = "https://github.com/ail-project/LacusCore"
+Issues = "https://github.com/ail-project/issues"
 Documentation = "https://lacuscore.readthedocs.io/en/latest/"
 
 [tool.poetry]
