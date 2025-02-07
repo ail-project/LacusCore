@@ -95,15 +95,19 @@ class LacusCore():
                  tor_proxy: str | None=None,
                  only_global_lookups: bool=True,
                  max_retries: int=3,
+                 headed_allowed: bool=False,
                  loglevel: str | int='INFO') -> None:
         self.master_logger = logging.getLogger(f'{self.__class__.__name__}')
         self.master_logger.setLevel(loglevel)
+
         self.redis = redis_connector
         self.max_capture_time = max_capture_time
         self.expire_results = expire_results
         self.tor_proxy = tor_proxy
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
+        self.headed_allowed = headed_allowed
+
         self.dnsresolver: Resolver = Resolver()
         self.dnsresolver.cache = Cache(900)
         self.dnsresolver.timeout = 2
@@ -139,6 +143,7 @@ class LacusCore():
                 rendered_hostname_only: bool=True,
                 with_favicon: bool=False,
                 allow_tracking: bool=False,
+                headless: bool=True,
                 max_retries: int | None=None,
                 force: bool=False,
                 recapture_interval: int=300,
@@ -169,6 +174,7 @@ class LacusCore():
                 rendered_hostname_only: bool=True,
                 with_favicon: bool=False,
                 allow_tracking: bool=False,
+                headless: bool=True,
                 max_retries: int | None=None,
                 force: bool=False,
                 recapture_interval: int=300,
@@ -201,6 +207,7 @@ class LacusCore():
         :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
         :param with_favicon: If True, PlaywrightCapture will attempt to get the potential favicons for the rendered URL. It is a dirty trick, see this issue for details: https://github.com/Lookyloo/PlaywrightCapture/issues/45
         :param allow_tracking: If True, PlaywrightCapture will attempt to click through the cookie banners. It is totally dependent on the framework used on the website.
+        :param headless: Whether to run the browser in headless mode. WARNING: requires to run in a graphical environment.
         :param max_retries: The maximum anount of retries for this capture
 
         :param force: Force recapture, even if the same one was already done within the recapture_interval
@@ -221,7 +228,10 @@ class LacusCore():
                         'timezone_id': timezone_id, 'locale': locale,
                         'color_scheme': color_scheme, 'java_script_enabled': java_script_enabled,
                         'viewport': viewport, 'referer': referer, 'with_favicon': with_favicon,
-                        'allow_tracking': allow_tracking, 'max_retries': max_retries}
+                        'allow_tracking': allow_tracking,
+                        # Quietly force it to true if headed is not allowed.
+                        'headless': headless if self.headed_allowed else True,
+                        'max_retries': max_retries}
 
         try:
             to_enqueue = CaptureSettings(**settings)
@@ -488,6 +498,7 @@ class LacusCore():
                         proxy=proxy,
                         general_timeout_in_sec=to_capture.general_timeout_in_sec,
                         loglevel=self.master_logger.getEffectiveLevel(),
+                        headless=to_capture.headless,
                         uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.headers  # type: ignore[assignment]

@@ -105,6 +105,7 @@ class CaptureSettings(BaseModel):
     referer: str | None = None
     with_favicon: bool = True
     allow_tracking: bool = False
+    headless: bool = True
     force: bool = False
     recapture_interval: int = 300
     priority: int = 0
