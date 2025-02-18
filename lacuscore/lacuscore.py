@@ -12,7 +12,6 @@ import re
 import sys
 import time
 import unicodedata
-import zlib
 
 from asyncio import Task
 from base64 import b64decode, b64encode
@@ -701,12 +700,6 @@ class LacusCore():
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': capture_uuid})
         if root_key is None:
             root_key = f'lacus:capture_results_hash:{capture_uuid}'
-
-            if not self.redis.exists(root_key):
-                if old_response := self.redis.get(f'lacus:capture_results:{capture_uuid}'):
-                    # TODO: remove in 1.8.* - old format used last in 1.6, and kept no more than 10H in redis
-                    return pickle.loads(zlib.decompress(old_response))
-                return None
 
         # New format and capture done
 
