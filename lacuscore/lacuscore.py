@@ -18,7 +18,7 @@ from base64 import b64decode, b64encode
 from datetime import date, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from tempfile import NamedTemporaryFile
-from typing import Literal, Any, overload, cast
+from typing import Literal, Any, overload, cast, TYPE_CHECKING
 from collections.abc import Iterator
 from uuid import uuid4
 from urllib.parse import urlsplit
@@ -54,6 +54,9 @@ else:
     def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
         if timeout_cm.expired():
             logger.warning(f'Timeout expired: {error_message}')
+
+if TYPE_CHECKING:
+    from playwright._impl._api_structures import Cookie
 
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
@@ -130,6 +133,7 @@ class LacusCore():
                 proxy: str | dict[str, str] | None=None,
                 general_timeout_in_sec: int | None=None,
                 cookies: list[dict[str, Any]] | None=None,
+                storage: dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | None=None,
                 geolocation: dict[str, float] | None=None,
@@ -161,6 +165,7 @@ class LacusCore():
                 proxy: str | dict[str, str] | None=None,
                 general_timeout_in_sec: int | None=None,
                 cookies: list[dict[str, Any]] | None=None,
+                storage: dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | None=None,
                 geolocation: dict[str, float] | None=None,
@@ -194,6 +199,7 @@ class LacusCore():
         :param proxy: SOCKS5 proxy to use for capturing
         :param general_timeout_in_sec: The capture will raise a timeout it it takes more than that time
         :param cookies: A list of cookies
+        :param storage: A storage state from another capture
         :param headers: The headers to pass to the capture
         :param http_credentials: HTTP Credentials to pass to the capture
         :param geolocation: Geolocation of the browser to pass to the capture
@@ -222,7 +228,7 @@ class LacusCore():
                         'browser': browser, 'device_name': device_name,
                         'user_agent': user_agent, 'proxy': proxy,
                         'general_timeout_in_sec': general_timeout_in_sec,
-                        'cookies': cookies, 'headers': headers,
+                        'cookies': cookies, 'storage': storage, 'headers': headers,
                         'http_credentials': http_credentials, 'geolocation': geolocation,
                         'timezone_id': timezone_id, 'locale': locale,
                         'color_scheme': color_scheme, 'java_script_enabled': java_script_enabled,
@@ -231,7 +237,6 @@ class LacusCore():
                         # Quietly force it to true if headed is not allowed.
                         'headless': headless if self.headed_allowed else True,
                         'max_retries': max_retries}
-
         try:
             to_enqueue = CaptureSettings(**settings)
         except ValidationError as e:
@@ -244,7 +249,6 @@ class LacusCore():
                 if isinstance(existing_uuid, bytes):
                     return existing_uuid.decode()
                 return existing_uuid
-
         if uuid:
             # Make sure we do not already have a capture with that UUID
             if self.get_capture_status(uuid) == CaptureStatus.UNKNOWN:
@@ -467,7 +471,7 @@ class LacusCore():
                 else:
                     browser_engine = 'webkit'
 
-            cookies: list[dict[str, Any]] = []
+            cookies: list[Cookie] = []
             if to_capture.cookies:
                 # In order to properly pass the cookies to playwright,
                 # each of then must have a name, a value and either a domain + path or a URL
@@ -476,18 +480,16 @@ class LacusCore():
                 # with the hostname of the URL we try to capture and the path with "/"
                 # NOTE: these changes can only be done here because we need the URL.
                 for cookie in to_capture.cookies:
-                    if len(cookie) == 1:
-                        # we have a cookie in the format key: value
-                        name, value = cookie.popitem()
-                        cookie = {'name': name, 'value': value}
                     if 'name' not in cookie or 'value' not in cookie:
                         logger.warning(f'Invalid cookie: {cookie}')
                         continue
                     if 'domain' not in cookie and 'url' not in cookie:
+                        if not splitted_url.hostname:
+                            # If for any reason we cannot get the hostname there, ignore the cookie
+                            continue
                         cookie['domain'] = splitted_url.hostname
                         cookie['path'] = '/'
                     cookies.append(cookie)
-
             try:
                 logger.debug(f'Capturing {url}')
                 stats_pipeline.sadd(f'stats:{today}:captures', url)
@@ -502,6 +504,7 @@ class LacusCore():
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.headers  # type: ignore[assignment]
                     capture.cookies = cookies  # type: ignore[assignment]
+                    capture.storage = to_capture.storage  # type: ignore[assignment]
                     capture.viewport = to_capture.viewport  # type: ignore[assignment]
                     capture.user_agent = to_capture.user_agent  # type: ignore[assignment]
                     capture.http_credentials = to_capture.http_credentials  # type: ignore[assignment]
@@ -665,6 +668,8 @@ class LacusCore():
             hash_to_set['har'] = pickle.dumps(results['har'])
         if results.get('cookies'):
             hash_to_set['cookies'] = pickle.dumps(results['cookies'])
+        if results.get('storage'):
+            hash_to_set['storage'] = pickle.dumps(results['storage'])
         if results.get('potential_favicons'):
             hash_to_set['potential_favicons'] = pickle.dumps(results['potential_favicons'])
         if results.get('html') and results['html'] is not None:
@@ -684,7 +689,7 @@ class LacusCore():
             hash_to_set['children'] = pickle.dumps(children)
 
         for key in results.keys():
-            if key in ['har', 'cookies', 'potential_favicons', 'html', 'children'] or not results.get(key):
+            if key in ['har', 'cookies', 'storage', 'potential_favicons', 'html', 'children'] or not results.get(key):
                 continue
             # these entries can be stored directly
             hash_to_set[key] = results[key]  # type: ignore[literal-required]
@@ -709,6 +714,8 @@ class LacusCore():
                 to_return['har'] = pickle.loads(value)
             elif key == b'cookies':
                 to_return['cookies'] = pickle.loads(value)
+            elif key == b'storage':
+                to_return['storage'] = pickle.loads(value)
             elif key == b'potential_favicons':
                 to_return['potential_favicons'] = pickle.loads(value)
             elif key == b'children':

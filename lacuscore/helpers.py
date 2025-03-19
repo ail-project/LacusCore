@@ -15,6 +15,8 @@ from pydantic_core import from_json
 
 from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
 
+from playwright._impl._api_structures import Cookie  # , StorageState
+
 
 class LacusCoreException(Exception):
     pass
@@ -71,7 +73,10 @@ class CaptureResponseJson(TypedDict, total=False):
     status: int
     last_redirected_url: str | None
     har: dict[str, Any] | None
-    cookies: list[dict[str, str]] | None
+    cookies: list[Cookie] | None
+    # NOTE: should be that, but StorageState doesn't define the indexeddb
+    # storage: StorageState | None
+    storage: dict[str, Any] | None
     error: str | None
     html: str | None
     png: str | None
@@ -93,7 +98,10 @@ class CaptureSettings(BaseModel):
     user_agent: str | None = None
     proxy: str | dict[str, str] | None = None
     general_timeout_in_sec: int | None = None
-    cookies: list[dict[str, Any]] | None = None
+    cookies: list[Cookie] | None = None
+    # NOTE: should be that, but StorageState doesn't define the indexeddb
+    # storage: StorageState | None = None
+    storage: dict[str, Any] | None = None
     headers: dict[str, str] | None = None
     http_credentials: dict[str, str] | None = None
     geolocation: dict[str, float] | None = None
@@ -197,10 +205,51 @@ class CaptureSettings(BaseModel):
         if not cookies:
             return None
         if isinstance(cookies, str):
-            # Cookies are invalid, ignoring.
-            pass
-        elif isinstance(cookies, list):
-            return cookies
+            # might be a json dump, try to load it and ignore otherwise
+            try:
+                cookies = json.loads(cookies)
+            except json.JSONDecodeError as e:
+                print(e)
+                # Cookies are invalid, ignoring.
+                return None
+        if isinstance(cookies, dict):
+            # might be a single cookie in the format name: value, make it a list
+            cookies = [cookies]
+        if isinstance(cookies, list):
+            # make sure the cookies are in the right format
+            to_return = []
+            for cookie in cookies:
+                if isinstance(cookie, dict):
+                    if 'name' in cookie and 'value' in cookie:
+                        to_return.append(cookie)
+                    elif len(cookie) == 1:
+                        # {'name': 'value'} => {'name': 'name', 'value': 'value'}
+                        name, value = cookie.popitem()
+                        if name and value:
+                            to_return.append({'name': name, 'value': value})
+                    else:
+                        # invalid cookie, ignoring
+                        pass
+            return to_return
+        return None
+
+    @field_validator('storage', mode='before')
+    @classmethod
+    def load_storage_json(cls, storage: Any) -> dict[str, Any] | None:
+        """That's the storage as exported from Playwright:
+            https://playwright.dev/python/docs/api/class-browsercontext#browser-context-storage-state
+        """
+        if not storage:
+            return None
+        if isinstance(storage, str):
+            # might be a json dump, try to load it and ignore otherwise
+            try:
+                storage = json.loads(storage)
+            except json.JSONDecodeError:
+                # storage is invalid, ignoring.
+                return None
+        if isinstance(storage, dict) and 'cookies' in storage and 'origins' in storage:
+            return storage
         return None
 
     @field_validator('headers', mode='before')
