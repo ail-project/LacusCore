@@ -23,7 +23,7 @@ dependencies = [
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
     "pydantic (>=2.10.6)",
     "eval-type-backport (>=0.2.2) ; python_version < \"3.10\"",
-    "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\"""
+    "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\""
 ]
 
 [project.urls]
