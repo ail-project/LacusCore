@@ -1671,14 +1671,14 @@ test = ["pytest"]
 
 [[package]]
 name = "playwrightcapture"
-version = "1.28.1"
+version = "1.28.2"
 description = "A simple library to capture websites using playwright"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "playwrightcapture-1.28.1-py3-none-any.whl", hash = "sha256:068302e8959348c97ffd04bd6f0d918f0e8cc9434fa2ac409b3f2d4ae98d6226"},
-    {file = "playwrightcapture-1.28.1.tar.gz", hash = "sha256:5dddf0516ffce8d7c2abfbe4530ee8fe878ac9adad10ec0e7d4ed59196a77a75"},
+    {file = "playwrightcapture-1.28.2-py3-none-any.whl", hash = "sha256:15ef6761bc6edd5a45defdc38651456c6ba6ead3e41191882dbe7fbf33b3fcdc"},
+    {file = "playwrightcapture-1.28.2.tar.gz", hash = "sha256:31ef7d6d195a2a20fbdbe28400d75ffb3b632d58d70d2e9db7482a536c03f762"},
 ]
 
 [package.dependencies]
@@ -1693,6 +1693,7 @@ puremagic = ">=1.28"
 pydub = {version = ">=0.25.1", optional = true, markers = "extra == \"recaptcha\""}
 setuptools = ">=77.0.1"
 SpeechRecognition = {version = ">=3.14.1", optional = true, markers = "extra == \"recaptcha\""}
+typing-extensions = {version = ">=4.12.2,<5.0.0", markers = "python_version < \"3.12\""}
 tzdata = ">=2025.1"
 w3lib = ">=2.3.1"
 
@@ -2990,4 +2991,4 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9.2,<4.0"
-content-hash = "d02ecd64fee98c7810d490266c6133ac07a82852aedea0cbec174af5d25dd342"
+content-hash = "a5bf67338fc8450334f719dc3d52a27dc507f694c9792d0d397d6609e83ef9ed"

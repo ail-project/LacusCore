@@ -18,11 +18,10 @@ from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureRespon
 
 from playwright._impl._api_structures import Cookie  # , StorageState
 
-
-if sys.version_info >= (3, 12):
-    from typing import TypedDict
-else:
+if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
+else:
+    from typing import TypedDict
 
 
 class LacusCoreException(Exception):
