@@ -16,12 +16,22 @@ from pydantic_core import from_json
 
 from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
 
-from playwright._impl._api_structures import Cookie  # , StorageState
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
+
+    class Cookie(TypedDict, total=False):
+        name: str
+        value: str
+        domain: str
+        path: str
+        expires: float
+        httpOnly: bool
+        secure: bool
+        sameSite: Literal["Lax", "None", "Strict"]
 else:
     from typing import TypedDict
+    from playwright._impl._api_structures import Cookie  # , StorageState
 
 
 class LacusCoreException(Exception):
