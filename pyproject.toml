@@ -1,6 +1,6 @@
 [project]
 name = "lacuscore"
-version = "1.13.4"
+version = "1.13.5"
 description = "Core of Lacus, usable as a module"
 authors = [
     {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
