@@ -1,6 +1,6 @@
 [project]
 name = "lacuscore"
-version = "1.13.1"
+version = "1.13.2"
 description = "Core of Lacus, usable as a module"
 authors = [
     {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
@@ -22,7 +22,8 @@ dependencies = [
     "dnspython (>=2.7.0)",
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
     "pydantic (>=2.10.6)",
-    "eval-type-backport (>=0.2.2) ; python_version < \"3.10\""
+    "eval-type-backport (>=0.2.2) ; python_version < \"3.10\"",
+    "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\"""
 ]
 
 [project.urls]

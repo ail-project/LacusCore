@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import sys
 
 from enum import IntEnum, unique
 from logging import LoggerAdapter
-from typing import Any, TypedDict, Literal
+from typing import Any, Literal
 from collections.abc import MutableMapping, Mapping
 
 from defang import refang
@@ -16,6 +17,12 @@ from pydantic_core import from_json
 from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
 
 from playwright._impl._api_structures import Cookie  # , StorageState
+
+
+if sys.version_info >= (3, 12):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 
 class LacusCoreException(Exception):
