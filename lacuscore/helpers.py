@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 
+from datetime import datetime, timedelta
 from enum import IntEnum, unique
 from logging import LoggerAdapter
 from typing import Any, Literal
@@ -218,6 +219,28 @@ class CaptureSettings(BaseModel):
     @field_validator('cookies', mode='before')
     @classmethod
     def load_cookies_json(cls, cookies: Any) -> list[dict[str, Any]] | None:
+
+        def __prepare_cookie(cookie: dict[str, Any]) -> dict[str, str | float | bool]:
+            if len(cookie) == 1:
+                # {'name': 'value'} => {'name': 'name', 'value': 'value'}
+                name, value = cookie.popitem()
+                if name and value:
+                    cookie = {'name': name, 'value': value}
+            if not cookie.get('name') or not cookie.get('value'):
+                # invalid cookie, ignoring
+                return {}
+
+            if 'expires' in cookie and isinstance(cookie['expires'], str):
+                # Make it a float, as expected by Playwright
+                try:
+                    cookie['expires'] = datetime.fromisoformat(cookie['expires']).timestamp()
+                except ValueError:
+                    # if it ends with a Z, it fails in python < 3.12
+                    # And we don't really care.
+                    # make it expire 10 days from now
+                    cookie['expires'] = (datetime.now() + timedelta(days=10)).timestamp()
+            return cookie
+
         if not cookies:
             return None
         if isinstance(cookies, str):
@@ -236,16 +259,7 @@ class CaptureSettings(BaseModel):
             to_return = []
             for cookie in cookies:
                 if isinstance(cookie, dict):
-                    if 'name' in cookie and 'value' in cookie:
-                        to_return.append(cookie)
-                    elif len(cookie) == 1:
-                        # {'name': 'value'} => {'name': 'name', 'value': 'value'}
-                        name, value = cookie.popitem()
-                        if name and value:
-                            to_return.append({'name': name, 'value': value})
-                    else:
-                        # invalid cookie, ignoring
-                        pass
+                    to_return.append(__prepare_cookie(cookie))
             return to_return
         return None
 
