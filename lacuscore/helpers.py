@@ -128,6 +128,7 @@ class CaptureSettings(BaseModel):
     java_script_enabled: bool = True
     viewport: dict[str, int] | None = None
     referer: str | None = None
+    with_screenshot: bool = True
     with_favicon: bool = True
     allow_tracking: bool = False
     headless: bool = True

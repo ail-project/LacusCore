@@ -144,6 +144,7 @@ class LacusCore():
                 viewport: dict[str, int] | None=None,
                 referer: str | None=None,
                 rendered_hostname_only: bool=True,
+                with_screenshot: bool=True,
                 with_favicon: bool=False,
                 allow_tracking: bool=False,
                 headless: bool=True,
@@ -176,6 +177,7 @@ class LacusCore():
                 viewport: dict[str, int] | None=None,
                 referer: str | None=None,
                 rendered_hostname_only: bool=True,
+                with_screenshot: bool=True,
                 with_favicon: bool=False,
                 allow_tracking: bool=False,
                 headless: bool=True,
@@ -210,6 +212,7 @@ class LacusCore():
         :param viewport: The viewport of the browser used for capturing
         :param referer: The referer URL for the capture
         :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
+        :param with_screenshot: If False, PlaywrightCapture won't take a screenshot of the rendered URL
         :param with_favicon: If True, PlaywrightCapture will attempt to get the potential favicons for the rendered URL. It is a dirty trick, see this issue for details: https://github.com/Lookyloo/PlaywrightCapture/issues/45
         :param allow_tracking: If True, PlaywrightCapture will attempt to click through the cookie banners. It is totally dependent on the framework used on the website.
         :param headless: Whether to run the browser in headless mode. WARNING: requires to run in a graphical environment.
@@ -232,7 +235,8 @@ class LacusCore():
                         'http_credentials': http_credentials, 'geolocation': geolocation,
                         'timezone_id': timezone_id, 'locale': locale,
                         'color_scheme': color_scheme, 'java_script_enabled': java_script_enabled,
-                        'viewport': viewport, 'referer': referer, 'with_favicon': with_favicon,
+                        'viewport': viewport, 'referer': referer,
+                        'with_screenshot': with_screenshot, 'with_favicon': with_favicon,
                         'allow_tracking': allow_tracking,
                         # Quietly force it to true if headed is not allowed.
                         'headless': headless if self.headed_allowed else True,
@@ -530,6 +534,7 @@ class LacusCore():
                                 url, referer=to_capture.referer,
                                 depth=to_capture.depth,
                                 rendered_hostname_only=to_capture.rendered_hostname_only,
+                                with_screenshot=to_capture.with_screenshot,
                                 with_favicon=to_capture.with_favicon,
                                 allow_tracking=to_capture.allow_tracking,
                                 max_depth_capture_time=self.max_capture_time)
