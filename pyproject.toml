@@ -21,7 +21,7 @@ dependencies = [
     "redis [hiredis] (>=5.2.1)",
     "dnspython (>=2.7.0)",
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
-    "pydantic (>=2.10.6)",
+    "pydantic (>=2.11.1)",
     "eval-type-backport (>=0.2.2) ; python_version < \"3.10\"",
     "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\""
 ]
@@ -49,7 +49,7 @@ docs = ["Sphinx (>=8.2.3) ; python_version >= \"3.11\""]
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.15.0"
 types-redis = {version = "^4.6.0.20241004"}
-types-requests = "^2.32.0.20250306"
+types-requests = "^2.32.0.20250328"
 types-beautifulsoup4 = "^4.12.0.20250204"
 pytest = "^8.3.5"
 
