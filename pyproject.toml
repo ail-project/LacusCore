@@ -15,13 +15,13 @@ dynamic = [ "classifiers" ]
 
 dependencies = [
     "requests (>=2.32.3)",
-    "playwrightcapture[recaptcha] (>=1.28.5)",
+    "playwrightcapture[recaptcha] (>=1.28.6)",
     "defang (>=0.5.3)",
     "ua-parser[regex] (>=1.0.1)",
     "redis [hiredis] (>=5.2.1)",
     "dnspython (>=2.7.0)",
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
-    "pydantic (>=2.11.2)",
+    "pydantic (>=2.11.3)",
     "eval-type-backport (>=0.2.2) ; python_version < \"3.10\"",
     "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\""
 ]
