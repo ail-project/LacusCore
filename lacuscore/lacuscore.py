@@ -131,6 +131,7 @@ class LacusCore():
                 browser: BROWSER | None=None, device_name: str | None=None,
                 user_agent: str | None=None,
                 proxy: str | dict[str, str] | None=None,
+                socks5_dns_resolver: str | list[str] | None=None,
                 general_timeout_in_sec: int | None=None,
                 cookies: list[dict[str, Any]] | list[Cookie] | None=None,
                 storage: dict[str, Any] | None=None,
@@ -164,6 +165,7 @@ class LacusCore():
                 browser: BROWSER | None=None, device_name: str | None=None,
                 user_agent: str | None=None,
                 proxy: str | dict[str, str] | None=None,
+                socks5_dns_resolver: str | list[str] | None=None,
                 general_timeout_in_sec: int | None=None,
                 cookies: list[dict[str, Any]] | list[Cookie] | None=None,
                 storage: dict[str, Any] | None=None,
@@ -199,6 +201,7 @@ class LacusCore():
         :param device_name: The name of the device, must be something Playwright knows
         :param user_agent: The user agent the browser will use for the capture
         :param proxy: SOCKS5 proxy to use for capturing
+        :param socks5_dns_resolver: DNS resolver for to populate IPs in HAR when a capture is done via a socks5 proxy.
         :param general_timeout_in_sec: The capture will raise a timeout it it takes more than that time
         :param cookies: A list of cookies
         :param storage: A storage state from another capture
@@ -229,7 +232,7 @@ class LacusCore():
             settings = {'depth': depth, 'rendered_hostname_only': rendered_hostname_only,
                         'url': url, 'document_name': document_name, 'document': document,
                         'browser': browser, 'device_name': device_name,
-                        'user_agent': user_agent, 'proxy': proxy,
+                        'user_agent': user_agent, 'proxy': proxy, 'socks5_dns_resolver': socks5_dns_resolver,
                         'general_timeout_in_sec': general_timeout_in_sec,
                         'cookies': cookies, 'storage': storage, 'headers': headers,
                         'http_credentials': http_credentials, 'geolocation': geolocation,
@@ -501,6 +504,7 @@ class LacusCore():
                         browser=browser_engine,
                         device_name=to_capture.device_name,
                         proxy=proxy,
+                        socks5_dns_resolver=to_capture.socks5_dns_resolver,
                         general_timeout_in_sec=to_capture.general_timeout_in_sec,
                         loglevel=self.master_logger.getEffectiveLevel(),
                         headless=to_capture.headless,

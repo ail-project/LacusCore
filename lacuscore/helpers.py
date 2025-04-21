@@ -114,6 +114,7 @@ class CaptureSettings(BaseModel):
     device_name: str | None = None
     user_agent: str | None = None
     proxy: str | dict[str, str] | None = None
+    socks5_dns_resolver: str | list[str] | None = None
     general_timeout_in_sec: int | None = None
     cookies: list[Cookie] | None = None
     # NOTE: should be that, but StorageState doesn't define the indexeddb
