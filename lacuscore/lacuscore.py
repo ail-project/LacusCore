@@ -331,15 +331,29 @@ class LacusCore():
         """
         if self.redis.zscore('lacus:to_capture', uuid) is not None:
             return CaptureStatus.QUEUED
-        elif self.redis.zscore('lacus:ongoing', uuid) is not None:
+        if self.redis.zscore('lacus:ongoing', uuid) is not None:
             return CaptureStatus.ONGOING
-        elif self.redis.exists(f'lacus:capture_settings:{uuid}'):
-            # we might have popped the UUID out of lacus:to_capture
-            # but not pused it in lacus:ongoing yet
-            return CaptureStatus.QUEUED
-        elif self.redis.exists(f'lacus:capture_results_hash:{uuid}'):
+        if self.redis.exists(f'lacus:capture_settings:{uuid}'):
+            # we might have a race condition between when the UUID is popped out of lacus:to_capture,
+            # and pushed in lacus:ongoing.
+            # if that's the case, we wait for a sec and check lacus:ongoing again
+            # If it's still not in ongoing, the UUID is broken and can be consdered unknown.
+            # This key is removed anyway once the capture is done.
+            max_checks = 10
+            for i in range(max_checks):
+                time.sleep(.1)
+                if self.redis.zscore('lacus:to_capture', uuid) is not None:
+                    # Could be re-added in that queue if the capture failed, but will be retried
+                    return CaptureStatus.QUEUED
+                if self.redis.zscore('lacus:ongoing', uuid) is not None:
+                    # The capture is actually ongoing now
+                    return CaptureStatus.ONGOING
+            # The UUID is still no anywhere to be found, it's broken.
+            self.redis.delete(f'lacus:capture_settings:{uuid}')
+            return CaptureStatus.UNKNOWN
+        if self.redis.exists(f'lacus:capture_results_hash:{uuid}'):
             return CaptureStatus.DONE
-        elif self.redis.exists(f'lacus:capture_results:{uuid}'):
+        if self.redis.exists(f'lacus:capture_results:{uuid}'):
             # TODO: remove in 1.8.* - old format used last in 1.6, and kept no more than 10H in redis
             return CaptureStatus.DONE
         return CaptureStatus.UNKNOWN
@@ -623,6 +637,11 @@ class LacusCore():
             # NOTE: in this block, we absolutely have to make sure the UUID is removed
             #       from the lacus:ongoing sorted set (it is definitely not ongoing anymore)
             #       and optionally re-added to lacus:to_capture if re want to retry it
+            #
+            # In order to have a consistent capture status, the capture UUID must either be in
+            # lacus:ongoing (while ongoing), in lacus:to_capture (on retry), or the result stored (on success).
+            # If the capture fails to be stored in valkey, we must also remove the capture settings
+            # so it is not dangling there.
 
             if to_capture.document:
                 os.unlink(tmp_f.name)
@@ -655,7 +674,11 @@ class LacusCore():
                         retry_redis_error -= 1
                         await asyncio.sleep(random.randint(5, 10))
                 else:
-                    self.redis.zrem('lacus:ongoing', uuid)
+                    # Unrecoverable redis error, remove the capture settings
+                    p = self.redis.pipeline()
+                    p.delete(f'lacus:capture_settings:{uuid}')
+                    p.zrem('lacus:ongoing', uuid)
+                    p.execute()
                     stats_pipeline.zincrby(f'stats:{today}:errors', 1, 'Redis Connection')
                     logger.critical('Unable to connect to redis and to push the result of the capture.')
 
