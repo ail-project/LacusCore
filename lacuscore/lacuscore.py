@@ -643,8 +643,12 @@ class LacusCore():
             # If the capture fails to be stored in valkey, we must also remove the capture settings
             # so it is not dangling there.
 
-            if to_capture.document:
-                os.unlink(tmp_f.name)
+            try:
+                if to_capture.document:
+                    os.unlink(tmp_f.name)
+            except UnboundLocalError:
+                # Missing settings, the capture failed.
+                pass
 
             if retry:
                 if self.redis.zcard('lacus:to_capture') == 0:
