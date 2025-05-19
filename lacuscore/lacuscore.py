@@ -19,7 +19,7 @@ from datetime import date, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from tempfile import NamedTemporaryFile
 from typing import Literal, Any, overload, cast, TYPE_CHECKING
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from uuid import uuid4
 from urllib.parse import urlsplit
 
@@ -358,7 +358,7 @@ class LacusCore():
             return CaptureStatus.DONE
         return CaptureStatus.UNKNOWN
 
-    def consume_queue(self, max_consume: int) -> Iterator[Task]:  # type: ignore[type-arg]
+    async def consume_queue(self, max_consume: int) -> AsyncIterator[Task[None]]:
         """Trigger the capture for captures with the highest priority. Up to max_consume.
 
         :yield: Captures.
@@ -378,6 +378,8 @@ class LacusCore():
             yield task_logger.create_task(self._capture(uuid, priority), name=uuid,
                                           logger=logger,
                                           message='Capture raised an uncaught exception')
+            # Make sur the task starts.
+            await asyncio.sleep(0.5)
 
     async def _capture(self, uuid: str, priority: int) -> None:
         """Trigger a specific capture
