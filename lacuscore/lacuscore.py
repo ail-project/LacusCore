@@ -260,6 +260,10 @@ class LacusCore():
             # Make sure we do not already have a capture with that UUID
             if self.get_capture_status(uuid) == CaptureStatus.UNKNOWN:
                 perma_uuid = uuid
+            elif (self.get_capture_status(uuid) == CaptureStatus.DONE
+                  and self.get_capture(uuid).get('error') is not None):
+                # The UUID exists, the capture is done, but it has an error -> re-capture on the same UUID
+                perma_uuid = uuid
             else:
                 perma_uuid = str(uuid4())
                 self.master_logger.warning(f'UUID {uuid} already exists, forcing a new one: {perma_uuid}.')
