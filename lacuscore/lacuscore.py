@@ -269,7 +269,7 @@ class LacusCore():
         p = self.redis.pipeline()
         p.set(f'lacus:query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
         p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=to_enqueue.redis_dump())
-        p.expire(f'lacus:capture_settings:{perma_uuid}', self.max_capture_time * 2)
+        p.expire(f'lacus:capture_settings:{perma_uuid}', self.max_capture_time * 10)
         p.zadd('lacus:to_capture', {perma_uuid: priority if priority is not None else 0})
         try:
             p.execute()
