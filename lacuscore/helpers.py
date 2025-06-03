@@ -122,12 +122,12 @@ class CaptureSettings(BaseModel):
     storage: dict[str, Any] | None = None
     headers: dict[str, str] | None = None
     http_credentials: dict[str, str] | None = None
-    geolocation: dict[str, float] | None = None
+    geolocation: dict[str, str | int | float] | None = None
     timezone_id: str | None = None
     locale: str | None = None
-    color_scheme: str | None = None
+    color_scheme: Literal['dark', 'light', 'no-preference', 'null'] | None = None
     java_script_enabled: bool = True
-    viewport: dict[str, int] | None = None
+    viewport: dict[str, str | int] | None = None
     referer: str | None = None
     with_screenshot: bool = True
     with_favicon: bool = True

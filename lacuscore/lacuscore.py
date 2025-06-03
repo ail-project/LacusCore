@@ -527,16 +527,16 @@ class LacusCore():
                         headless=to_capture.headless,
                         uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
-                    capture.headers = to_capture.headers  # type: ignore[assignment]
+                    capture.headers = to_capture.headers
                     capture.cookies = cookies  # type: ignore[assignment]
-                    capture.storage = to_capture.storage  # type: ignore[assignment]
-                    capture.viewport = to_capture.viewport  # type: ignore[assignment]
-                    capture.user_agent = to_capture.user_agent  # type: ignore[assignment]
-                    capture.http_credentials = to_capture.http_credentials  # type: ignore[assignment]
-                    capture.geolocation = to_capture.geolocation  # type: ignore[assignment]
-                    capture.timezone_id = to_capture.timezone_id  # type: ignore[assignment]
-                    capture.locale = to_capture.locale  # type: ignore[assignment]
-                    capture.color_scheme = to_capture.color_scheme  # type: ignore[assignment]
+                    capture.storage = to_capture.storage
+                    capture.viewport = to_capture.viewport
+                    capture.user_agent = to_capture.user_agent
+                    capture.http_credentials = to_capture.http_credentials
+                    capture.geolocation = to_capture.geolocation
+                    capture.timezone_id = to_capture.timezone_id
+                    capture.locale = to_capture.locale
+                    capture.color_scheme = to_capture.color_scheme
                     capture.java_script_enabled = to_capture.java_script_enabled
 
                     # make sure the initialization doesn't take too long
