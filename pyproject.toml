@@ -49,7 +49,7 @@ docs = ["Sphinx (>=8.2.3) ; python_version >= \"3.11\""]
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.16.0"
 types-redis = {version = "^4.6.0.20241004"}
-types-requests = "^2.32.0.20250602"
+types-requests = "^2.32.4.20250611"
 types-beautifulsoup4 = "^4.12.0.20250516"
 pytest = "^8.4.0"
 
