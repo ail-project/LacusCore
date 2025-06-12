@@ -383,7 +383,7 @@ class LacusCore():
                                           logger=logger,
                                           message='Capture raised an uncaught exception')
             # Make sur the task starts.
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.1)
 
     async def _capture(self, uuid: str, priority: int) -> None:
         """Trigger a specific capture
