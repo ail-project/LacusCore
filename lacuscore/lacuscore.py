@@ -150,6 +150,7 @@ class LacusCore():
                 allow_tracking: bool=False,
                 headless: bool=True,
                 max_retries: int | None=None,
+                init_script: str | None=None,
                 force: bool=False,
                 recapture_interval: int=300,
                 priority: int=0,
@@ -184,6 +185,7 @@ class LacusCore():
                 allow_tracking: bool=False,
                 headless: bool=True,
                 max_retries: int | None=None,
+                init_script: str | None=None,
                 force: bool=False,
                 recapture_interval: int=300,
                 priority: int=0,
@@ -220,6 +222,7 @@ class LacusCore():
         :param allow_tracking: If True, PlaywrightCapture will attempt to click through the cookie banners. It is totally dependent on the framework used on the website.
         :param headless: Whether to run the browser in headless mode. WARNING: requires to run in a graphical environment.
         :param max_retries: The maximum anount of retries for this capture
+        :param init_script: A JavaScript that will be executed on each page of the capture.
 
         :param force: Force recapture, even if the same one was already done within the recapture_interval
         :param recapture_interval: The time the enqueued settings are kept in memory to avoid duplicates
@@ -243,6 +246,7 @@ class LacusCore():
                         'allow_tracking': allow_tracking,
                         # Quietly force it to true if headed is not allowed.
                         'headless': headless if self.headed_allowed else True,
+                        'init_script': init_script,
                         'max_retries': max_retries}
         try:
             to_enqueue = CaptureSettings(**settings)
@@ -529,6 +533,7 @@ class LacusCore():
                         general_timeout_in_sec=to_capture.general_timeout_in_sec,
                         loglevel=self.master_logger.getEffectiveLevel(),
                         headless=to_capture.headless,
+                        init_script=to_capture.init_script,
                         uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.headers

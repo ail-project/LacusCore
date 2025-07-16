@@ -133,6 +133,7 @@ class CaptureSettings(BaseModel):
     with_favicon: bool = True
     allow_tracking: bool = False
     headless: bool = True
+    init_script: str | None = None
     force: bool = False
     recapture_interval: int = 300
     priority: int = 0
