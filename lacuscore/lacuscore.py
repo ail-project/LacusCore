@@ -540,7 +540,7 @@ class LacusCore():
                         uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.headers
-                    capture.cookies = cookies  # type: ignore[assignment]
+                    capture.cookies = cookies
                     capture.storage = to_capture.storage
                     capture.viewport = to_capture.viewport
                     capture.user_agent = to_capture.user_agent
