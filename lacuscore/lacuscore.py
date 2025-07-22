@@ -56,7 +56,7 @@ else:
             logger.warning(f'Timeout expired: {error_message}')
 
 if sys.version_info < (3, 12):
-    from helpers import SetCookieParam, Cookie
+    from .helpers import SetCookieParam, Cookie
 else:
     from playwright._impl._api_structures import SetCookieParam, Cookie
 
