@@ -30,6 +30,7 @@ if sys.version_info < (3, 12):
         httpOnly: bool
         secure: bool
         sameSite: Literal["Lax", "None", "Strict"]
+        partitionKey: str
 else:
     from typing import TypedDict
     from playwright._impl._api_structures import Cookie  # , StorageState
