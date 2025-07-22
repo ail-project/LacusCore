@@ -24,6 +24,18 @@ if sys.version_info < (3, 12):
     # And the MyPy failure: https://github.com/ail-project/LacusCore/actions/runs/16447753492/job/46484287947
     from typing_extensions import TypedDict
 
+    class SetCookieParam(TypedDict, total=False):
+        name: str
+        value: str
+        url: str
+        domain: str
+        path: str
+        expires: float
+        httpOnly: bool
+        secure: bool
+        sameSite: Literal["Lax", "None", "Strict"]
+        partitionKey: str
+
     class Cookie(TypedDict, total=False):
         name: str
         value: str
@@ -36,7 +48,7 @@ if sys.version_info < (3, 12):
         partitionKey: str
 else:
     from typing import TypedDict
-    from playwright._impl._api_structures import Cookie  # , StorageState
+    from playwright._impl._api_structures import SetCookieParam, Cookie  # , StorageState
 
 
 class LacusCoreException(Exception):
@@ -120,7 +132,7 @@ class CaptureSettings(BaseModel):
     proxy: str | dict[str, str] | None = None
     socks5_dns_resolver: str | list[str] | None = None
     general_timeout_in_sec: int | None = None
-    cookies: list[Cookie] | None = None
+    cookies: list[SetCookieParam] | None = None
     # NOTE: should be that, but StorageState doesn't define the indexeddb
     # storage: StorageState | None = None
     storage: dict[str, Any] | None = None
@@ -255,8 +267,8 @@ class CaptureSettings(BaseModel):
             try:
                 cookies = json.loads(cookies)
             except json.JSONDecodeError as e:
-                print(e)
                 # Cookies are invalid, ignoring.
+                print(f'Broken cookie: {e}')
                 return None
         if isinstance(cookies, dict):
             # might be a single cookie in the format name: value, make it a list

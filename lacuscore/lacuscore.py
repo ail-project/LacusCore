@@ -57,9 +57,9 @@ else:
 
 if TYPE_CHECKING:
     if sys.version_info < (3, 12):
-        from helpers import Cookie
+        from helpers import SetCookieParam, Cookie
     else:
-        from playwright._impl._api_structures import Cookie
+        from playwright._impl._api_structures import SetCookieParam, Cookie
 
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
@@ -506,7 +506,7 @@ class LacusCore():
                 else:
                     browser_engine = 'webkit'
 
-            cookies: list[Cookie] = []
+            cookies: list[SetCookieParam] = []
             if to_capture.cookies:
                 # In order to properly pass the cookies to playwright,
                 # each of then must have a name, a value and either a domain + path or a URL
@@ -540,7 +540,7 @@ class LacusCore():
                         uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.headers
-                    capture.cookies = cookies
+                    capture.cookies = cookies  # type: ignore[assignment]
                     capture.storage = to_capture.storage
                     capture.viewport = to_capture.viewport
                     capture.user_agent = to_capture.user_agent
