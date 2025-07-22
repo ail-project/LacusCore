@@ -20,10 +20,20 @@ from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureRespon
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
+
+    class Cookie(TypedDict, total=False):
+        name: str
+        value: str
+        domain: str
+        path: str
+        expires: float
+        httpOnly: bool
+        secure: bool
+        sameSite: Literal["Lax", "None", "Strict"]
+        partitionKey: str
 else:
     from typing import TypedDict
-
-from playwright._impl._api_structures import Cookie  # , StorageState
+    from playwright._impl._api_structures import Cookie  # , StorageState
 
 
 class LacusCoreException(Exception):
