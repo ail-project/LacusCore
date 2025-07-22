@@ -56,7 +56,10 @@ else:
             logger.warning(f'Timeout expired: {error_message}')
 
 if TYPE_CHECKING:
-    from playwright._impl._api_structures import Cookie
+    if sys.version_info < (3, 12):
+        from helpers import Cookie
+    else:
+        from playwright._impl._api_structures import Cookie
 
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']

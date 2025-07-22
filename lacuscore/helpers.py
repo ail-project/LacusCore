@@ -19,6 +19,9 @@ from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureRespon
 
 
 if sys.version_info < (3, 12):
+    # This bit is required as long as we need to support python < 3.12, stop removing it, you idiot
+    # That's the runtime failure: https://github.com/ail-project/lacus/actions/runs/16447900822/job/46484807036
+    # And the MyPy failure: https://github.com/ail-project/LacusCore/actions/runs/16447753492/job/46484287947
     from typing_extensions import TypedDict
 
     class Cookie(TypedDict, total=False):
