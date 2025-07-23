@@ -55,10 +55,8 @@ else:
         if timeout_cm.expired():
             logger.warning(f'Timeout expired: {error_message}')
 
-if sys.version_info < (3, 12):
-    from .helpers import SetCookieParam, Cookie
-else:
-    from playwright._impl._api_structures import SetCookieParam, Cookie
+if TYPE_CHECKING:
+    from playwrightcapture import SetCookieParam
 
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
@@ -135,7 +133,7 @@ class LacusCore():
                 proxy: str | dict[str, str] | None=None,
                 socks5_dns_resolver: str | list[str] | None=None,
                 general_timeout_in_sec: int | None=None,
-                cookies: list[dict[str, Any]] | list[Cookie] | None=None,
+                cookies: list[dict[str, Any]] | list[SetCookieParam] | None=None,
                 storage: dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | None=None,
@@ -170,7 +168,7 @@ class LacusCore():
                 proxy: str | dict[str, str] | None=None,
                 socks5_dns_resolver: str | list[str] | None=None,
                 general_timeout_in_sec: int | None=None,
-                cookies: list[dict[str, Any]] | list[Cookie] | None=None,
+                cookies: list[dict[str, Any]] | list[SetCookieParam] | None=None,
                 storage: dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | None=None,

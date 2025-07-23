@@ -15,40 +15,12 @@ from defang import refang
 from pydantic import BaseModel, field_validator, model_validator, ValidationError
 from pydantic_core import from_json
 
-from playwrightcapture.capture import CaptureResponse as PlaywrightCaptureResponse
-
+from playwrightcapture import CaptureResponse as PlaywrightCaptureResponse, SetCookieParam, Cookie
 
 if sys.version_info < (3, 12):
-    # This bit is required as long as we need to support python < 3.12, stop removing it, you idiot
-    # That's the runtime failure: https://github.com/ail-project/lacus/actions/runs/16447900822/job/46484807036
-    # And the MyPy failure: https://github.com/ail-project/LacusCore/actions/runs/16447753492/job/46484287947
     from typing_extensions import TypedDict
-
-    class SetCookieParam(TypedDict, total=False):
-        name: str
-        value: str
-        url: str
-        domain: str
-        path: str
-        expires: float
-        httpOnly: bool
-        secure: bool
-        sameSite: Literal["Lax", "None", "Strict"]
-        partitionKey: str
-
-    class Cookie(TypedDict, total=False):
-        name: str
-        value: str
-        domain: str
-        path: str
-        expires: float
-        httpOnly: bool
-        secure: bool
-        sameSite: Literal["Lax", "None", "Strict"]
-        partitionKey: str
 else:
     from typing import TypedDict
-    from playwright._impl._api_structures import SetCookieParam, Cookie  # , StorageState
 
 
 class LacusCoreException(Exception):
