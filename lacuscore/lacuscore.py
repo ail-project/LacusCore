@@ -56,7 +56,7 @@ else:
             logger.warning(f'Timeout expired: {error_message}')
 
 if TYPE_CHECKING:
-    from playwrightcapture import SetCookieParam
+    from playwrightcapture import SetCookieParam, Cookie
 
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
@@ -168,7 +168,7 @@ class LacusCore():
                 proxy: str | dict[str, str] | None=None,
                 socks5_dns_resolver: str | list[str] | None=None,
                 general_timeout_in_sec: int | None=None,
-                cookies: list[dict[str, Any]] | list[SetCookieParam] | None=None,
+                cookies: str | dict[str, str] | list[dict[str, Any]] | list[SetCookieParam] | list[Cookie] | None=None,
                 storage: dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | None=None,
