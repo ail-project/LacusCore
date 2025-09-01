@@ -86,7 +86,8 @@ class LacusCore():
     :param redis_connector: Pre-configured connector to a redis instance.
     :param max_capture_time: If the capture takes more than that time, break (in seconds)
     :param expire_results: The capture results are stored in redis. Expire them after they are done (in seconds).
-    :param tor_proxy: URL to a SOCKS 5 tor proxy. If you have tor installed, this is the default: socks5://127.0.0.1:9050.
+    :param tor_proxy: URL to a SOCKS5 tor proxy. If you have tor installed, this is the default: socks5://127.0.0.1:9050.
+    :param i2p_proxy: URL to a HTTP I2P proxy. If you have i2p installed, this is the default: http://127.0.0.1:4444.
     :param only_global_lookups: Discard captures that point to non-public IPs.
     :param max_retries: How many times should we re-try a capture if it failed.
     """
@@ -95,6 +96,7 @@ class LacusCore():
                  max_capture_time: int=3600,
                  expire_results: int=36000,
                  tor_proxy: str | None=None,
+                 i2p_proxy: str | None=None,
                  only_global_lookups: bool=True,
                  max_retries: int=3,
                  headed_allowed: bool=False,
@@ -106,6 +108,7 @@ class LacusCore():
         self.max_capture_time = max_capture_time
         self.expire_results = expire_results
         self.tor_proxy = tor_proxy
+        self.i2p_proxy = i2p_proxy
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
         self.headed_allowed = headed_allowed
@@ -456,11 +459,17 @@ class LacusCore():
                             and splitted_url.hostname
                             and splitted_url.hostname.split('.')[-1] == 'onion')):
                     proxy = self.tor_proxy
+            elif self.i2p_proxy:
+                if (not proxy  # if the TLD is "i2p", we use the pre-configured I2P proxy
+                        and splitted_url.netloc
+                        and splitted_url.hostname
+                        and splitted_url.hostname.split('.')[-1] == 'i2p'):
+                    proxy = self.i2p_proxy
 
             if self.only_global_lookups and not proxy and splitted_url.scheme not in ['data', 'file']:
                 # not relevant if we also have a proxy, or the thing to capture is a data URI or a file on disk
                 if splitted_url.netloc:
-                    if splitted_url.hostname and splitted_url.hostname.split('.')[-1] != 'onion':
+                    if splitted_url.hostname and splitted_url.hostname.split('.')[-1] not in ['onion', 'i2p']:
                         ips_to_check = []
                         # check if the hostname is an IP
                         try:
