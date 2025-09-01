@@ -9,6 +9,7 @@ import os
 import pickle
 import random
 import re
+import socket
 import sys
 import time
 import unicodedata
@@ -38,6 +39,7 @@ from redis.exceptions import DataError
 
 from . import task_logger
 from .helpers import (
+    LacusCoreException,
     LacusCoreLogAdapter, CaptureError, RetryCapture, CaptureSettingsError,
     CaptureStatus, CaptureResponse, CaptureResponseJson, CaptureSettings)
 
@@ -80,6 +82,19 @@ def _secure_filename(filename: str) -> str:
     return filename
 
 
+def _check_proxy_port_open(proxy: dict[str, str] | str) -> bool:
+    if isinstance(proxy, dict):
+        to_check = proxy['server']
+    else:
+        to_check = proxy
+    splitted_proxy_url = urlsplit(to_check)
+    if not splitted_proxy_url.hostname or not splitted_proxy_url.port:
+        raise LacusCoreException('Invalid pre-defined proxy (needs hostname and port): {proxy}')
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(3)
+        return s.connect_ex((splitted_proxy_url.hostname, splitted_proxy_url.port)) == 0
+
+
 class LacusCore():
     """Capture URLs or web enabled documents using PlaywrightCapture.
 
@@ -95,8 +110,8 @@ class LacusCore():
     def __init__(self, redis_connector: Redis[bytes], /, *,
                  max_capture_time: int=3600,
                  expire_results: int=36000,
-                 tor_proxy: str | None=None,
-                 i2p_proxy: str | None=None,
+                 tor_proxy: dict[str, str] | str | None=None,
+                 i2p_proxy: dict[str, str] | str | None=None,
                  only_global_lookups: bool=True,
                  max_retries: int=3,
                  headed_allowed: bool=False,
@@ -107,8 +122,10 @@ class LacusCore():
         self.redis = redis_connector
         self.max_capture_time = max_capture_time
         self.expire_results = expire_results
+
         self.tor_proxy = tor_proxy
         self.i2p_proxy = i2p_proxy
+
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
         self.headed_allowed = headed_allowed
@@ -453,18 +470,26 @@ class LacusCore():
             proxy = to_capture.proxy
             if self.tor_proxy:
                 # check if onion or forced
-                if (proxy == 'force_tor'  # if the proxy is set to "force_tor", we use the pre-configured tor proxy, regardless the URL.
+                if (proxy == 'force_tor'  # if the proxy is set to "force_tor", we use the pre-configured tor proxy, regardless the URL, legacy feature.
                         or (not proxy  # if the TLD is "onion", we use the pre-configured tor proxy
                             and splitted_url.netloc
                             and splitted_url.hostname
                             and splitted_url.hostname.split('.')[-1] == 'onion')):
+                    if not _check_proxy_port_open(self.tor_proxy):
+                        logger.critical(f'Unable to connect to the default tor proxy: {self.tor_proxy}')
+                        raise CaptureError('The selected tor proxy is unreachable, unable to run the capture.')
                     proxy = self.tor_proxy
-            elif self.i2p_proxy:
+                    logger.info('Using the default tor proxy.')
+            if self.i2p_proxy:
                 if (not proxy  # if the TLD is "i2p", we use the pre-configured I2P proxy
                         and splitted_url.netloc
                         and splitted_url.hostname
                         and splitted_url.hostname.split('.')[-1] == 'i2p'):
+                    if not _check_proxy_port_open(self.i2p_proxy):
+                        logger.critical(f'Unable to connect to the default tor proxy: {self.i2p_proxy}')
+                        raise CaptureError('The selected I2P proxy is unreachable, unable to run the capture.')
                     proxy = self.i2p_proxy
+                    logger.info('Using the default I2P proxy.')
 
             if self.only_global_lookups and not proxy and splitted_url.scheme not in ['data', 'file']:
                 # not relevant if we also have a proxy, or the thing to capture is a data URI or a file on disk
