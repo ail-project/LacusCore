@@ -88,6 +88,7 @@ class CaptureResponseJson(TypedDict, total=False):
     downloaded_filename: str | None
     downloaded_file: str | None
     children: list[CaptureResponseJson] | None
+    trusted_timestamps: dict[str, str] | None
     runtime: float | None
     potential_favicons: list[str] | None
 
@@ -122,6 +123,7 @@ class CaptureSettings(BaseModel):
     allow_tracking: bool = False
     headless: bool = True
     init_script: str | None = None
+    with_trusted_timestamps: bool = False
     force: bool = False
     recapture_interval: int = 300
     priority: int = 0

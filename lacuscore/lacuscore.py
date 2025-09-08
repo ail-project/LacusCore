@@ -31,7 +31,7 @@ from dns.asyncresolver import Resolver
 from dns.exception import DNSException
 from dns.exception import Timeout as DNSTimeout
 
-from playwrightcapture import Capture, PlaywrightCaptureException, InvalidPlaywrightParameter
+from playwrightcapture import Capture, PlaywrightCaptureException, InvalidPlaywrightParameter, TrustedTimestampSettings
 from pydantic import ValidationError
 from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -115,6 +115,7 @@ class LacusCore():
                  only_global_lookups: bool=True,
                  max_retries: int=3,
                  headed_allowed: bool=False,
+                 tt_settings: TrustedTimestampSettings | None=None,
                  loglevel: str | int='INFO') -> None:
         self.master_logger = logging.getLogger(f'{self.__class__.__name__}')
         self.master_logger.setLevel(loglevel)
@@ -125,6 +126,8 @@ class LacusCore():
 
         self.tor_proxy = tor_proxy
         self.i2p_proxy = i2p_proxy
+
+        self.tt_settings = tt_settings
 
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
@@ -167,6 +170,7 @@ class LacusCore():
                 rendered_hostname_only: bool=True,
                 with_screenshot: bool=True,
                 with_favicon: bool=False,
+                with_trusted_timestamps: bool=False,
                 allow_tracking: bool=False,
                 headless: bool=True,
                 max_retries: int | None=None,
@@ -202,6 +206,7 @@ class LacusCore():
                 rendered_hostname_only: bool=True,
                 with_screenshot: bool=True,
                 with_favicon: bool=False,
+                with_trusted_timestamps: bool=False,
                 allow_tracking: bool=False,
                 headless: bool=True,
                 max_retries: int | None=None,
@@ -239,6 +244,7 @@ class LacusCore():
         :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
         :param with_screenshot: If False, PlaywrightCapture won't take a screenshot of the rendered URL
         :param with_favicon: If True, PlaywrightCapture will attempt to get the potential favicons for the rendered URL. It is a dirty trick, see this issue for details: https://github.com/Lookyloo/PlaywrightCapture/issues/45
+        :param with_trusted_timestamps: If True, PlaywrightCapture will trigger calls to a remote timestamp service. For that to work, this class must have been initialized with tt_settings. See RFC3161 for details: https://www.rfc-editor.org/rfc/rfc3161
         :param allow_tracking: If True, PlaywrightCapture will attempt to click through the cookie banners. It is totally dependent on the framework used on the website.
         :param headless: Whether to run the browser in headless mode. WARNING: requires to run in a graphical environment.
         :param max_retries: The maximum anount of retries for this capture
@@ -263,6 +269,7 @@ class LacusCore():
                         'color_scheme': color_scheme, 'java_script_enabled': java_script_enabled,
                         'viewport': viewport, 'referer': referer,
                         'with_screenshot': with_screenshot, 'with_favicon': with_favicon,
+                        'with_trusted_timestamps': with_trusted_timestamps,
                         'allow_tracking': allow_tracking,
                         # Quietly force it to true if headed is not allowed.
                         'headless': headless if self.headed_allowed else True,
@@ -293,6 +300,10 @@ class LacusCore():
                 self.master_logger.warning(f'UUID {uuid} already exists, forcing a new one: {perma_uuid}.')
         else:
             perma_uuid = str(uuid4())
+
+        if to_enqueue.with_trusted_timestamps and not self.tt_settings:
+            self.master_logger.warning('Cannot trigger trusted timestamp, the remote timestamper service settings are missing.')
+            to_enqueue.with_trusted_timestamps = False
 
         p = self.redis.pipeline()
         p.set(f'lacus:query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
@@ -568,6 +579,7 @@ class LacusCore():
                         loglevel=self.master_logger.getEffectiveLevel(),
                         headless=to_capture.headless,
                         init_script=to_capture.init_script,
+                        tt_settings=self.tt_settings,
                         uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.headers
@@ -601,6 +613,7 @@ class LacusCore():
                                 with_screenshot=to_capture.with_screenshot,
                                 with_favicon=to_capture.with_favicon,
                                 allow_tracking=to_capture.allow_tracking,
+                                with_trusted_timestamps=to_capture.with_trusted_timestamps,
                                 max_depth_capture_time=self.max_capture_time)
                     except (TimeoutError, asyncio.exceptions.TimeoutError):
                         timeout_expired(capture_timeout, logger, 'Capture took too long.')
@@ -757,6 +770,8 @@ class LacusCore():
         if results.get('html') and results['html'] is not None:
             # Need to avoid unicode encore errors, and surrogates are not allowed
             hash_to_set['html'] = results['html'].encode('utf-8', 'surrogateescape')
+        if results.get('trusted_timestamps'):
+            hash_to_set['trusted_timestamps'] = pickle.dumps(results['trusted_timestamps'])
         if 'children' in results and results['children'] is not None:
             padding_length = len(str(len(results['children'])))
             children = set()
@@ -771,11 +786,10 @@ class LacusCore():
             hash_to_set['children'] = pickle.dumps(children)
 
         for key in results.keys():
-            if key in ['har', 'cookies', 'storage', 'potential_favicons', 'html', 'children'] or not results.get(key):
+            if key in ['har', 'cookies', 'storage', 'trusted_timestamps', 'potential_favicons', 'html', 'children'] or not results.get(key):
                 continue
             # these entries can be stored directly
             hash_to_set[key] = results[key]  # type: ignore[literal-required]
-
         if hash_to_set:
             pipeline.hset(root_key, mapping=hash_to_set)  # type: ignore[arg-type]
             # Make sure the key expires
@@ -800,6 +814,8 @@ class LacusCore():
                 to_return['storage'] = pickle.loads(value)
             elif key == b'potential_favicons':
                 to_return['potential_favicons'] = pickle.loads(value)
+            elif key == b'trusted_timestamps':
+                to_return['trusted_timestamps'] = pickle.loads(value)
             elif key == b'children':
                 to_return['children'] = []
                 for child_root_key in sorted(pickle.loads(value)):
