@@ -740,6 +740,8 @@ class LacusCore():
                     p = self.redis.pipeline()
                     p.delete(f'lacus:capture_settings:{uuid}')
                     p.zrem('lacus:ongoing', uuid)
+                    result = {'error': "Unable to store the result of the capture in redis (probably a huge download)."}
+                    self._store_capture_response(p, uuid, result)
                     p.execute()
                     stats_pipeline.zincrby(f'stats:{today}:errors', 1, 'Redis Connection')
                     logger.critical('Unable to connect to redis and to push the result of the capture.')
