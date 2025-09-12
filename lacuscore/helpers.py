@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 
 from datetime import datetime, timedelta
@@ -10,6 +9,8 @@ from enum import IntEnum, unique
 from logging import LoggerAdapter
 from typing import Any, Literal
 from collections.abc import MutableMapping, Mapping
+
+import orjson
 
 from defang import refang
 from pydantic import BaseModel, field_validator, model_validator, ValidationError
@@ -239,8 +240,8 @@ class CaptureSettings(BaseModel):
         if isinstance(cookies, str):
             # might be a json dump, try to load it and ignore otherwise
             try:
-                cookies = json.loads(cookies)
-            except json.JSONDecodeError as e:
+                cookies = orjson.loads(cookies)
+            except orjson.JSONDecodeError as e:
                 # Cookies are invalid, ignoring.
                 print(f'Broken cookie: {e}')
                 return None
@@ -267,8 +268,8 @@ class CaptureSettings(BaseModel):
         if isinstance(storage, str):
             # might be a json dump, try to load it and ignore otherwise
             try:
-                storage = json.loads(storage)
-            except json.JSONDecodeError:
+                storage = orjson.loads(storage)
+            except orjson.JSONDecodeError:
                 # storage is invalid, ignoring.
                 return None
         if isinstance(storage, dict) and 'cookies' in storage and 'origins' in storage:
@@ -367,7 +368,7 @@ class CaptureSettings(BaseModel):
                 mapping_capture[key] = 1 if value else 0
             elif isinstance(value, (list, dict)):
                 if value:
-                    mapping_capture[key] = json.dumps(value)
+                    mapping_capture[key] = orjson.dumps(value)
             elif isinstance(value, (bytes, float, int, str)) and value not in ['', b'']:  # we're ok with 0 for example
                 mapping_capture[key] = value
         return mapping_capture
