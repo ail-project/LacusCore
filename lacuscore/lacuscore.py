@@ -761,31 +761,35 @@ class LacusCore():
             root_key = f'lacus:capture_results_hash:{capture_uuid}'
 
         hash_to_set = {}
-        if results.get('har'):
-            hash_to_set['har'] = pickle.dumps(results['har'])
-        if results.get('cookies'):
-            hash_to_set['cookies'] = pickle.dumps(results['cookies'])
-        if results.get('storage'):
-            hash_to_set['storage'] = pickle.dumps(results['storage'])
-        if results.get('potential_favicons'):
-            hash_to_set['potential_favicons'] = pickle.dumps(results['potential_favicons'])
-        if results.get('html') and results['html'] is not None:
-            # Need to avoid unicode encore errors, and surrogates are not allowed
-            hash_to_set['html'] = results['html'].encode('utf-8', 'surrogateescape')
-        if results.get('trusted_timestamps'):
-            hash_to_set['trusted_timestamps'] = pickle.dumps(results['trusted_timestamps'])
-        if 'children' in results and results['children'] is not None:
-            padding_length = len(str(len(results['children'])))
-            children = set()
-            for i, child in enumerate(results['children']):
-                child_key = f'{root_key}_{i:0{padding_length}}'
-                if not child:
-                    # the child key is empty
-                    logger.info(f'The response for {child_key} is empty.')
-                    continue
-                self._store_capture_response(pipeline, capture_uuid, child, child_key)
-                children.add(child_key)
-            hash_to_set['children'] = pickle.dumps(children)
+        try:
+            if results.get('har'):
+                hash_to_set['har'] = pickle.dumps(results['har'])
+            if results.get('cookies'):
+                hash_to_set['cookies'] = pickle.dumps(results['cookies'])
+            if results.get('storage'):
+                hash_to_set['storage'] = pickle.dumps(results['storage'])
+            if results.get('potential_favicons'):
+                hash_to_set['potential_favicons'] = pickle.dumps(results['potential_favicons'])
+            if results.get('html') and results['html'] is not None:
+                # Need to avoid unicode encore errors, and surrogates are not allowed
+                hash_to_set['html'] = results['html'].encode('utf-8', 'surrogateescape')
+            if results.get('trusted_timestamps'):
+                hash_to_set['trusted_timestamps'] = pickle.dumps(results['trusted_timestamps'])
+            if 'children' in results and results['children'] is not None:
+                padding_length = len(str(len(results['children'])))
+                children = set()
+                for i, child in enumerate(results['children']):
+                    child_key = f'{root_key}_{i:0{padding_length}}'
+                    if not child:
+                        # the child key is empty
+                        logger.info(f'The response for {child_key} is empty.')
+                        continue
+                    self._store_capture_response(pipeline, capture_uuid, child, child_key)
+                    children.add(child_key)
+                hash_to_set['children'] = pickle.dumps(children)
+        except Exception:
+            logger.exception('Error while pickling the results.')
+            results['error'] = "Error while saving the results (unable to pickle), please retry."
 
         for key in results.keys():
             if key in ['har', 'cookies', 'storage', 'trusted_timestamps', 'potential_favicons', 'html', 'children'] or not results.get(key):
