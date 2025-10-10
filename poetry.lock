@@ -1942,28 +1942,28 @@ playwright = ">=1.0.0,<2.0.0"
 
 [[package]]
 name = "playwrightcapture"
-version = "1.33.0"
+version = "1.34.0"
 description = "A simple library to capture websites using playwright"
 optional = false
-python-versions = "<4.0,>=3.9.2"
+python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "playwrightcapture-1.33.0-py3-none-any.whl", hash = "sha256:59ef6a786aa5c0422485063d74bae1e2cfcf97595e47deebc387f907c5b4b03a"},
-    {file = "playwrightcapture-1.33.0.tar.gz", hash = "sha256:a4623f9d52b9b9af199485541bd059d8ddbc6eb1c9a45b0601d811801ba5ff25"},
+    {file = "playwrightcapture-1.34.0-py3-none-any.whl", hash = "sha256:d5c2c7ff3c8ddb05bb4281023e3fd77a2d3e59697fe594c84c27533d0e5b3a8e"},
+    {file = "playwrightcapture-1.34.0.tar.gz", hash = "sha256:e39afbd5ce1a71dc0737ffd74261d450ec7b39f0361cf3a1c1a3ee9c02ee92f3"},
 ]
 
 [package.dependencies]
-aiohttp = {version = ">=3.12.15", extras = ["speedups"]}
+aiohttp = {version = ">=3.13.0", extras = ["speedups"]}
 aiohttp-socks = ">=0.10.1"
 async-timeout = {version = ">=5.0.1", markers = "python_version < \"3.11\""}
-beautifulsoup4 = {version = ">=4.13.5", extras = ["charset-normalizer", "lxml"]}
+beautifulsoup4 = {version = ">=4.14.2", extras = ["charset-normalizer", "lxml"]}
 dateparser = ">=1.2.2"
 dnspython = ">=2.7.0,<3.0.0"
 orjson = ">=3.11.3,<4.0.0"
 playwright = ">=1.55.0"
 playwright-stealth = ">=2"
 puremagic = ">=1.30"
-pydub-ng = {version = ">=0.2.0", optional = true, markers = "python_version >= \"3.10\" and extra == \"recaptcha\""}
+pydub-ng = {version = ">=0.2.0", optional = true, markers = "extra == \"recaptcha\""}
 python-socks = ">=2.7.1,<3.0.0"
 rfc3161-client = ">=1.0.4,<2.0.0"
 setuptools = ">=80.9.0"
@@ -1973,7 +1973,7 @@ tzdata = ">=2025.2"
 w3lib = ">=2.3.1"
 
 [package.extras]
-recaptcha = ["SpeechRecognition (>=3.14.3)", "pydub (>=0.25.1) ; python_version < \"3.10\"", "pydub-ng (>=0.2.0) ; python_version >= \"3.10\""]
+recaptcha = ["SpeechRecognition (>=3.14.3)", "pydub-ng (>=0.2.0)"]
 
 [[package]]
 name = "pluggy"
@@ -3600,4 +3600,4 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "6f129e5c7c18df7fee8c1fe5a923732de0a23155e7185d14efca3639b1f17977"
+content-hash = "e521ed7dbcf88cc12c7f7458e1ee2213daa3b163126cbb12ca26b5ae176b3e1e"
