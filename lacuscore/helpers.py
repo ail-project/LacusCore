@@ -233,6 +233,20 @@ class CaptureSettings(BaseModel):
                     # And we don't really care.
                     # make it expire 10 days from now
                     cookie['expires'] = (datetime.now() + timedelta(days=10)).timestamp()
+
+            if 'sameSite' in cookie and isinstance(cookie['sameSite'], str):
+                # we may get the value as lax, none, or strict when it should be Lax, None, or Strict
+                if cookie['sameSite'] == 'lax':
+                    cookie['sameSite'] = 'Lax'
+                if cookie['sameSite'] == 'strict':
+                    cookie['sameSite'] = 'Strict'
+                if cookie['sameSite'] == 'none ':
+                    cookie['sameSite'] = 'None'
+
+            if 'partitionKey' in cookie and cookie['partitionKey'] is None:
+                # We expect a string, pop the entry if None.
+                del cookie['partitionKey']
+
             return cookie
 
         if not cookies:
