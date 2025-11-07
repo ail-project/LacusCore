@@ -771,8 +771,10 @@ class LacusCore():
             if results.get('potential_favicons'):
                 hash_to_set['potential_favicons'] = pickle.dumps(results['potential_favicons'])
             if results.get('html') and results['html'] is not None:
-                # Need to avoid unicode encore errors, and surrogates are not allowed
+                # Need to avoid unicode encode errors, and surrogates are not allowed
                 hash_to_set['html'] = results['html'].encode('utf-8', 'surrogateescape')
+            if results.get('frames') and results['frames'] is not None:
+                hash_to_set['frames'] = pickle.dumps(results['frames'])
             if results.get('trusted_timestamps'):
                 hash_to_set['trusted_timestamps'] = pickle.dumps(results['trusted_timestamps'])
             if 'children' in results and results['children'] is not None:
@@ -792,7 +794,8 @@ class LacusCore():
             results['error'] = "Error while saving the results (unable to pickle), please retry."
 
         for key in results.keys():
-            if key in ['har', 'cookies', 'storage', 'trusted_timestamps', 'potential_favicons', 'html', 'children'] or not results.get(key):
+            if key in ['har', 'cookies', 'storage', 'trusted_timestamps', 'potential_favicons',
+                       'html', 'frames', 'children'] or not results.get(key):
                 continue
             # these entries can be stored directly
             hash_to_set[key] = results[key]  # type: ignore[literal-required]
@@ -822,6 +825,8 @@ class LacusCore():
                 to_return['potential_favicons'] = pickle.loads(value)
             elif key == b'trusted_timestamps':
                 to_return['trusted_timestamps'] = pickle.loads(value)
+            elif key == b'frames':
+                to_return['frames'] = pickle.loads(value)
             elif key == b'children':
                 to_return['children'] = []
                 for child_root_key in sorted(pickle.loads(value)):

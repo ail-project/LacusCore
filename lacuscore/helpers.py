@@ -16,7 +16,9 @@ from defang import refang
 from pydantic import BaseModel, field_validator, model_validator, ValidationError
 from pydantic_core import from_json
 
-from playwrightcapture import CaptureResponse as PlaywrightCaptureResponse, SetCookieParam, Cookie
+from playwrightcapture import (CaptureResponse as PlaywrightCaptureResponse,
+                               FramesResponse as PlaywrightFramesResponse,
+                               SetCookieParam, Cookie)
 
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
@@ -85,6 +87,7 @@ class CaptureResponseJson(TypedDict, total=False):
     storage: dict[str, Any] | None
     error: str | None
     html: str | None
+    frames: PlaywrightFramesResponse | None
     png: str | None
     downloaded_filename: str | None
     downloaded_file: str | None
