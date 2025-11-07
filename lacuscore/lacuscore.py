@@ -308,7 +308,7 @@ class LacusCore():
         p = self.redis.pipeline()
         p.set(f'lacus:query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
         p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=to_enqueue.redis_dump())
-        p.expire(f'lacus:capture_settings:{perma_uuid}', self.max_capture_time * 10)
+        p.expire(f'lacus:capture_settings:{perma_uuid}', self.max_capture_time * 100)
         p.zadd('lacus:to_capture', {perma_uuid: priority if priority is not None else 0})
         try:
             p.execute()
@@ -660,7 +660,7 @@ class LacusCore():
                     logger.debug(f'Retrying {url} for the first time.')
                     retry = True
                     self.redis.setex(f'lacus:capture_retry:{uuid}',
-                                     self.max_capture_time * (max_retries + 10),
+                                     self.max_capture_time * (max_retries + 100),
                                      max_retries - 1)
                 else:
                     current_retry = int(_current_retry.decode())
