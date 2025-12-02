@@ -21,7 +21,7 @@ dependencies = [
     "redis[hiredis] (>=5.3.0,<6.0.0)",
     "dnspython (>=2.8.0)",
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
-    "pydantic (>=2.12.4)",
+    "pydantic (>=2.12.5)",
     "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\"",
     "orjson (>=3.11.3,<4.0.0)"
 ]
@@ -44,10 +44,10 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-docs = ["Sphinx (>=8.2.3) ; python_version >= \"3.11\""]
+docs = ["Sphinx (>=9.0.1) ; python_version >= \"3.11\""]
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^1.18.2"
+mypy = "^1.19.0"
 types-redis = {version = "^4.6.0.20241004"}
 types-requests = "^2.32.4.20250913"
 types-beautifulsoup4 = "^4.12.0.20250516"
