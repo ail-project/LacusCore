@@ -15,7 +15,7 @@ dynamic = [ "classifiers" ]
 
 dependencies = [
     "requests (>=2.32.5)",
-    "playwrightcapture[recaptcha] (>=1.36.0)",
+    "playwrightcapture[recaptcha] (>=1.36.1)",
     "defang (>=0.5.3)",
     "ua-parser[regex] (>=1.0.1)",
     "redis[hiredis] (>=5.3.0,<6.0.0)",
@@ -44,12 +44,12 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-docs = ["Sphinx (>=9.0.4) ; python_version >= \"3.11\""]
+docs = ["Sphinx (>=9.1.0) ; python_version >= \"3.12\""]
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.19.1"
 types-redis = {version = "^4.6.0.20241004"}
-types-requests = "^2.32.4.20250913"
+types-requests = "^2.32.4.20260107"
 types-beautifulsoup4 = "^4.12.0.20250516"
 pytest = "^9.0.2"
 
