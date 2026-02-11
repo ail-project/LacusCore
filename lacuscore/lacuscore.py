@@ -177,6 +177,7 @@ class LacusCore():
                 init_script: str | None=None,
                 force: bool=False,
                 recapture_interval: int=300,
+                final_wait: int=5,
                 priority: int=0,
                 uuid: str | None=None
                 ) -> str:
@@ -213,6 +214,7 @@ class LacusCore():
                 init_script: str | None=None,
                 force: bool=False,
                 recapture_interval: int=300,
+                final_wait: int=5,
                 priority: int=0,
                 uuid: str | None=None
                 ) -> str:
@@ -249,6 +251,7 @@ class LacusCore():
         :param headless: Whether to run the browser in headless mode. WARNING: requires to run in a graphical environment.
         :param max_retries: The maximum anount of retries for this capture
         :param init_script: A JavaScript that will be executed on each page of the capture.
+        :param final_wait: The very last wait time, after the instrumentation is done.
 
         :param force: Force recapture, even if the same one was already done within the recapture_interval
         :param recapture_interval: The time the enqueued settings are kept in memory to avoid duplicates
@@ -271,6 +274,7 @@ class LacusCore():
                         'with_screenshot': with_screenshot, 'with_favicon': with_favicon,
                         'with_trusted_timestamps': with_trusted_timestamps,
                         'allow_tracking': allow_tracking,
+                        'final_wait': final_wait,
                         # Quietly force it to true if headed is not allowed.
                         'headless': headless if self.headed_allowed else True,
                         'init_script': init_script,
@@ -614,7 +618,8 @@ class LacusCore():
                                 with_favicon=to_capture.with_favicon,
                                 allow_tracking=to_capture.allow_tracking,
                                 with_trusted_timestamps=to_capture.with_trusted_timestamps,
-                                max_depth_capture_time=self.max_capture_time)
+                                max_depth_capture_time=self.max_capture_time,
+                                final_wait=to_capture.final_wait)
                     except (TimeoutError, asyncio.exceptions.TimeoutError):
                         timeout_expired(capture_timeout, logger, 'Capture took too long.')
                         logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')

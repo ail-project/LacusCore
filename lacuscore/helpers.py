@@ -130,6 +130,7 @@ class CaptureSettings(BaseModel):
     with_trusted_timestamps: bool = False
     force: bool = False
     recapture_interval: int = 300
+    final_wait: int = 5
     priority: int = 0
     max_retries: int | None = None
     uuid: str | None = None
