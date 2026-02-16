@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 
 from datetime import datetime, timedelta
@@ -175,12 +176,10 @@ class CaptureSettings(BaseModel):
         if isinstance(url, str):
             #  In case we get a defanged url at this stage.
             _url = refang(url)  # type: ignore[no-untyped-call]
-            if (not _url.lower().startswith('data:')
-                    and not _url.lower().startswith('http:')
-                    and not _url.lower().startswith('https:')
-                    and not _url.lower().startswith('file:')):
-                _url = f'http://{_url}'
-            return _url
+            if re.match("(http(s?)|data|file):", _url, re.I):
+                # if the URL starts with any of that, return immediately
+                return _url
+            return f'http://{_url}'
         return url
 
     @field_validator('document_name', mode='after')
