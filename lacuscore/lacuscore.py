@@ -33,9 +33,9 @@ from dns.exception import Timeout as DNSTimeout
 
 from playwrightcapture import Capture, PlaywrightCaptureException, InvalidPlaywrightParameter, TrustedTimestampSettings
 from pydantic import ValidationError
-from redis import Redis
-from redis.exceptions import ConnectionError as RedisConnectionError
-from redis.exceptions import DataError
+from valkey import Valkey
+from valkey.exceptions import ConnectionError as ValkeyConnectionError
+from valkey.exceptions import DataError
 
 from . import task_logger
 from .helpers import (
@@ -98,7 +98,7 @@ def _check_proxy_port_open(proxy: dict[str, str] | str) -> bool:
 class LacusCore():
     """Capture URLs or web enabled documents using PlaywrightCapture.
 
-    :param redis_connector: Pre-configured connector to a redis instance.
+    :param redis_connector: Pre-configured connector to a valkey instance.
     :param max_capture_time: If the capture takes more than that time, break (in seconds)
     :param expire_results: The capture results are stored in redis. Expire them after they are done (in seconds).
     :param tor_proxy: URL to a SOCKS5 tor proxy. If you have tor installed, this is the default: socks5://127.0.0.1:9050.
@@ -107,7 +107,7 @@ class LacusCore():
     :param max_retries: How many times should we re-try a capture if it failed.
     """
 
-    def __init__(self, redis_connector: Redis[bytes], /, *,
+    def __init__(self, redis_connector: Valkey, /, *,
                  max_capture_time: int=3600,
                  expire_results: int=36000,
                  tor_proxy: dict[str, str] | str | None=None,
@@ -315,7 +315,7 @@ class LacusCore():
         p.expire(f'lacus:capture_settings:{perma_uuid}', self.max_capture_time * 100)
         p.zadd('lacus:to_capture', {perma_uuid: priority if priority is not None else 0})
         try:
-            p.execute()
+            p.execute()  # type: ignore[no-untyped-call]
         except DataError:
             self.master_logger.exception(f'Unable to enqueue: {to_enqueue}')
             raise CaptureSettingsError(f'Unable to enqueue: {to_enqueue}')
@@ -406,13 +406,12 @@ class LacusCore():
 
         :yield: Captures.
         """
-        value: list[tuple[bytes, float]]
         while max_consume > 0:
             value = self.redis.zpopmax('lacus:to_capture')
             if not value:
                 # Nothing to capture
                 break
-            if not value[0]:
+            if not value[0] or not isinstance(value[0], tuple):
                 continue
             max_consume -= 1
             uuid: str = value[0][0].decode()
@@ -452,7 +451,7 @@ class LacusCore():
                 raise CaptureError(f'No capture settings for {uuid}')
 
             try:
-                to_capture = CaptureSettings(**{k.decode(): v.decode() for k, v in _to_capture.items()})  # type: ignore[arg-type]
+                to_capture = CaptureSettings(**{k.decode(): v.decode() for k, v in _to_capture.items()})
             except ValidationError as e:
                 logger.warning(f'Settings invalid: {e}')
                 raise CaptureSettingsError('Invalid settings', e)
@@ -720,7 +719,7 @@ class LacusCore():
                 p = self.redis.pipeline()
                 p.zrem('lacus:ongoing', uuid)
                 p.zadd('lacus:to_capture', {uuid: priority - 1})
-                p.execute()
+                p.execute()  # type: ignore[no-untyped-call]
             else:
                 retry_redis_error = 3
                 while retry_redis_error > 0:
@@ -734,9 +733,9 @@ class LacusCore():
                             self._store_capture_response(p, uuid, result)
                         p.delete(f'lacus:capture_settings:{uuid}')
                         p.zrem('lacus:ongoing', uuid)
-                        p.execute()
+                        p.execute()  # type: ignore[no-untyped-call]
                         break
-                    except RedisConnectionError as e:
+                    except ValkeyConnectionError as e:
                         logger.warning(f'Unable to store capture result - Redis Connection Error: {e}')
                         retry_redis_error -= 1
                         await asyncio.sleep(random.randint(5, 10))
@@ -747,7 +746,7 @@ class LacusCore():
                     p.zrem('lacus:ongoing', uuid)
                     result = {'error': "Unable to store the result of the capture in redis (probably a huge download)."}
                     self._store_capture_response(p, uuid, result)
-                    p.execute()
+                    p.execute()  # type: ignore[no-untyped-call]
                     stats_pipeline.zincrby(f'stats:{today}:errors', 1, 'Redis Connection')
                     logger.critical('Unable to connect to redis and to push the result of the capture.')
 
@@ -757,9 +756,9 @@ class LacusCore():
             stats_pipeline.expire(f'stats:{today}:retry_failed', expire_time)
             stats_pipeline.expire(f'stats:{today}:retry_success', expire_time)
             stats_pipeline.expire(f'stats:{today}:captures', expire_time)
-            stats_pipeline.execute()
+            stats_pipeline.execute()  # type: ignore[no-untyped-call]
 
-    def _store_capture_response(self, pipeline: Redis, capture_uuid: str, results: CaptureResponse,   # type: ignore[type-arg]
+    def _store_capture_response(self, pipeline: Valkey, capture_uuid: str, results: CaptureResponse,
                                 root_key: str | None=None) -> None:
         logger = LacusCoreLogAdapter(self.master_logger, {'uuid': capture_uuid})
         if root_key is None:
@@ -873,7 +872,7 @@ class LacusCore():
         self._store_capture_response(p, uuid, result)
         p.delete(f'lacus:capture_settings:{uuid}')
         p.zrem('lacus:ongoing', uuid)
-        p.execute()
+        p.execute()  # type: ignore[no-untyped-call]
 
     async def __get_ips(self, logger: LacusCoreLogAdapter, hostname: str) -> list[IPv4Address | IPv6Address]:
         # We need to use dnspython for resolving because socket.getaddrinfo will sometimes be stuck for ~10s

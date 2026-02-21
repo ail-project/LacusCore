@@ -378,8 +378,8 @@ class CaptureSettings(BaseModel):
             return viewport
         raise CaptureSettingsError(f'A viewport must have a width and a height: {viewport}')
 
-    def redis_dump(self) -> Mapping[str | bytes, bytes | float | int | str]:
-        mapping_capture: dict[str | bytes, bytes | float | int | str] = {}
+    def redis_dump(self) -> Mapping[bytes | memoryview[int] | str | int | float, bytes | memoryview[int] | str | int | float]:
+        mapping_capture: dict[bytes | memoryview[int] | str | int | float, bytes | memoryview[int] | str | int | float] = {}
         for key, value in dict(self).items():
             if value is None:
                 continue
