@@ -239,11 +239,13 @@ class CaptureSettings(BaseModel):
 
             if 'sameSite' in cookie and isinstance(cookie['sameSite'], str):
                 # we may get the value as lax, none, or strict when it should be Lax, None, or Strict
-                if cookie['sameSite'] == 'lax':
+                # the values from browser.cookies.getAll are weird (used in the web extension):
+                # https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/cookies/SameSiteStatus
+                if cookie['sameSite'] in ['lax', 'unspecified']:
                     cookie['sameSite'] = 'Lax'
                 if cookie['sameSite'] == 'strict':
                     cookie['sameSite'] = 'Strict'
-                if cookie['sameSite'] == 'none ':
+                if cookie['sameSite'] in ['none', 'no_restriction']:
                     cookie['sameSite'] = 'None'
 
             if 'partitionKey' in cookie and cookie['partitionKey'] is None:
