@@ -1,6 +1,6 @@
 [project]
 name = "lacuscore"
-version = "1.21.2"
+version = "1.21.3"
 description = "Core of Lacus, usable as a module"
 authors = [
     {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
@@ -15,7 +15,7 @@ dynamic = [ "classifiers" ]
 
 dependencies = [
     "requests (>=2.32.5)",
-    "playwrightcapture[recaptcha] (>=1.36.8)",
+    "playwrightcapture[recaptcha] (>=1.36.10)",
     "defang (>=0.5.3)",
     "ua-parser[regex] (>=1.0.1)",
     "redis[hiredis] (>=5.3.0,<6.0.0)",
