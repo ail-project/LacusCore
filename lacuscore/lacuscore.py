@@ -41,7 +41,8 @@ from . import task_logger
 from .helpers import (
     LacusCoreException,
     LacusCoreLogAdapter, CaptureError, RetryCapture, CaptureSettingsError,
-    CaptureStatus, CaptureResponse, CaptureResponseJson, CaptureSettings)
+    CaptureStatus, CaptureResponse, CaptureResponseJson, CaptureSettings,
+    ViewportSettings, HttpCredentialsSettings, GeolocationSettings)
 
 if sys.version_info < (3, 11):
     from async_timeout import timeout
@@ -159,13 +160,13 @@ class LacusCore():
                 cookies: list[dict[str, Any]] | list[SetCookieParam] | None=None,
                 storage: dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
-                http_credentials: dict[str, str] | None=None,
-                geolocation: dict[str, str | int | float] | None=None,
+                http_credentials: dict[str, str] | HttpCredentialsSettings | None=None,
+                geolocation: dict[str, str | int | float] | GeolocationSettings | None=None,
                 timezone_id: str | None=None,
                 locale: str | None=None,
                 color_scheme: str | None=None,
                 java_script_enabled: bool=True,
-                viewport: dict[str, int | str] | None=None,
+                viewport: dict[str, int | str] | ViewportSettings | None=None,
                 referer: str | None=None,
                 rendered_hostname_only: bool=True,
                 with_screenshot: bool=True,
@@ -196,13 +197,13 @@ class LacusCore():
                 cookies: str | dict[str, str] | list[dict[str, Any]] | list[SetCookieParam] | list[Cookie] | None=None,
                 storage: dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
-                http_credentials: dict[str, str] | None=None,
-                geolocation: dict[str, str | int | float] | None=None,
+                http_credentials: dict[str, str] | HttpCredentialsSettings | None=None,
+                geolocation: dict[str, str | int | float] | GeolocationSettings | None=None,
                 timezone_id: str | None=None,
                 locale: str | None=None,
                 color_scheme: str | None=None,
                 java_script_enabled: bool=True,
-                viewport: dict[str, int | str] | None=None,
+                viewport: dict[str, int | str] | ViewportSettings | None=None,
                 referer: str | None=None,
                 rendered_hostname_only: bool=True,
                 with_screenshot: bool=True,
@@ -589,10 +590,10 @@ class LacusCore():
                     capture.headers = to_capture.headers
                     capture.cookies = cookies  # type: ignore[assignment]
                     capture.storage = to_capture.storage
-                    capture.viewport = to_capture.viewport
+                    capture.viewport = to_capture.viewport.model_dump() if to_capture.viewport else None
                     capture.user_agent = to_capture.user_agent
-                    capture.http_credentials = to_capture.http_credentials
-                    capture.geolocation = to_capture.geolocation
+                    capture.http_credentials = to_capture.http_credentials.model_dump() if to_capture.http_credentials else None
+                    capture.geolocation = to_capture.geolocation.model_dump() if to_capture.geolocation else None
                     capture.timezone_id = to_capture.timezone_id
                     capture.locale = to_capture.locale
                     capture.color_scheme = to_capture.color_scheme

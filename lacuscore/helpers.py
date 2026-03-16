@@ -98,6 +98,22 @@ class CaptureResponseJson(TypedDict, total=False):
     potential_favicons: list[str] | None
 
 
+class ViewportSettings(BaseModel):
+    width: int
+    height: int
+
+
+class GeolocationSettings(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class HttpCredentialsSettings(BaseModel):
+    username: str
+    password: str
+    origin: str | None = None
+
+
 class CaptureSettings(BaseModel):
     '''The capture settings that can be passed to Lacus.'''
 
@@ -108,20 +124,19 @@ class CaptureSettings(BaseModel):
     device_name: str | None = None
     user_agent: str | None = None
     proxy: str | dict[str, str] | None = None
-    socks5_dns_resolver: str | list[str] | None = None
     general_timeout_in_sec: int | None = None
     cookies: list[SetCookieParam] | None = None
     # NOTE: should be that, but StorageState doesn't define the indexeddb
     # storage: StorageState | None = None
     storage: dict[str, Any] | None = None
     headers: dict[str, str] | None = None
-    http_credentials: dict[str, str] | None = None
-    geolocation: dict[str, str | int | float] | None = None
+    http_credentials: HttpCredentialsSettings | None = None
+    geolocation: GeolocationSettings | None = None
     timezone_id: str | None = None
     locale: str | None = None
     color_scheme: Literal['dark', 'light', 'no-preference', 'null'] | None = None
     java_script_enabled: bool = True
-    viewport: dict[str, str | int] | None = None
+    viewport: ViewportSettings | None = None
     referer: str | None = None
     with_screenshot: bool = True
     with_favicon: bool = True
@@ -129,15 +144,19 @@ class CaptureSettings(BaseModel):
     headless: bool = True
     init_script: str | None = None
     with_trusted_timestamps: bool = False
+    final_wait: int = 5
+
+    # for automatic depth capture
+    depth: int = 0
+    rendered_hostname_only: bool = True  # Note: only used if depth is > 0
+
+    # internal
+    socks5_dns_resolver: str | list[str] | None = None
     force: bool = False
     recapture_interval: int = 300
-    final_wait: int = 5
     priority: int = 0
     max_retries: int | None = None
     uuid: str | None = None
-
-    depth: int = 0
-    rendered_hostname_only: bool = True  # Note: only used if depth is > 0
 
     @model_validator(mode="before")
     @classmethod
@@ -315,69 +334,6 @@ class CaptureSettings(BaseModel):
             return headers
         return None
 
-    @field_validator('http_credentials', mode='before')
-    @classmethod
-    def load_http_creds_json(cls, http_credentials: Any) -> dict[str, str] | None:
-        if not http_credentials:
-            return None
-        if isinstance(http_credentials, str):
-            # ignore
-            return None
-        elif isinstance(http_credentials, dict):
-            return http_credentials
-        return None
-
-    @field_validator('http_credentials', mode='after')
-    @classmethod
-    def check_http_creds(cls, http_credentials: dict[str, str] | None) -> dict[str, str] | None:
-        if not http_credentials:
-            return None
-        if 'username' in http_credentials and 'password' in http_credentials:
-            return http_credentials
-        raise CaptureSettingsError(f'HTTP credentials must have a username and a password: {http_credentials}')
-
-    @field_validator('geolocation', mode='before')
-    @classmethod
-    def load_geolocation_json(cls, geolocation: Any) -> dict[str, float] | None:
-        if not geolocation:
-            return None
-        if isinstance(geolocation, str):
-            # ignore
-            return None
-        elif isinstance(geolocation, dict):
-            return geolocation
-        return None
-
-    @field_validator('geolocation', mode='after')
-    @classmethod
-    def check_geolocation(cls, geolocation: dict[str, float] | None) -> dict[str, float] | None:
-        if not geolocation:
-            return None
-        if 'latitude' in geolocation and 'longitude' in geolocation:
-            return geolocation
-        raise CaptureSettingsError(f'A geolocation must have a latitude and a longitude: {geolocation}')
-
-    @field_validator('viewport', mode='before')
-    @classmethod
-    def load_viewport_json(cls, viewport: Any) -> dict[str, int] | None:
-        if not viewport:
-            return None
-        if isinstance(viewport, str):
-            # ignore
-            return None
-        elif isinstance(viewport, dict):
-            return viewport
-        return None
-
-    @field_validator('viewport', mode='after')
-    @classmethod
-    def check_viewport(cls, viewport: dict[str, int] | None) -> dict[str, int] | None:
-        if not viewport:
-            return None
-        if 'width' in viewport and 'height' in viewport:
-            return viewport
-        raise CaptureSettingsError(f'A viewport must have a width and a height: {viewport}')
-
     def redis_dump(self) -> Mapping[str | bytes, bytes | float | int | str]:
         mapping_capture: dict[str | bytes, bytes | float | int | str] = {}
         for key, value in dict(self).items():
@@ -385,9 +341,13 @@ class CaptureSettings(BaseModel):
                 continue
             if isinstance(value, bool):
                 mapping_capture[key] = 1 if value else 0
+            elif isinstance(value, BaseModel):
+                mapping_capture[key] = value.model_dump_json()
             elif isinstance(value, (list, dict)):
                 if value:
                     mapping_capture[key] = orjson.dumps(value)
             elif isinstance(value, (bytes, float, int, str)) and value not in ['', b'']:  # we're ok with 0 for example
                 mapping_capture[key] = value
+            else:
+                raise CaptureSettingsError(f'Unexpected type {type(value)} for {key}')
         return mapping_capture
