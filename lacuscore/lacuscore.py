@@ -19,7 +19,7 @@ from base64 import b64decode, b64encode
 from datetime import date, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from tempfile import NamedTemporaryFile
-from typing import Literal, Any, overload, cast, TYPE_CHECKING
+from typing import Literal, Any, overload, cast
 from collections.abc import AsyncIterator
 from uuid import uuid4
 from urllib.parse import urlsplit
@@ -31,6 +31,9 @@ from dns.asyncresolver import Resolver
 from dns.exception import DNSException
 from dns.exception import Timeout as DNSTimeout
 
+from lookyloo_models import (CaptureSettingsError, CaptureSettings, ViewportSettings,
+                             GeolocationSettings, HttpCredentialsSettings,
+                             Cookie)
 from playwrightcapture import Capture, PlaywrightCaptureException, InvalidPlaywrightParameter, TrustedTimestampSettings
 from pydantic import ValidationError
 from redis import Redis
@@ -40,9 +43,8 @@ from redis.exceptions import DataError
 from . import task_logger
 from .helpers import (
     LacusCoreException,
-    LacusCoreLogAdapter, CaptureError, RetryCapture, CaptureSettingsError,
-    CaptureStatus, CaptureResponse, CaptureResponseJson, CaptureSettings,
-    ViewportSettings, HttpCredentialsSettings, GeolocationSettings)
+    LacusCoreLogAdapter, CaptureError, RetryCapture,
+    CaptureStatus, CaptureResponse, CaptureResponseJson)
 
 if sys.version_info < (3, 11):
     from async_timeout import timeout
@@ -57,10 +59,6 @@ else:
     def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
         if timeout_cm.expired():
             logger.warning(f'Timeout expired: {error_message}')
-
-if TYPE_CHECKING:
-    from playwrightcapture import SetCookieParam, Cookie
-
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
 
@@ -157,7 +155,7 @@ class LacusCore():
                 proxy: str | dict[str, str] | None=None,
                 socks5_dns_resolver: str | list[str] | None=None,
                 general_timeout_in_sec: int | None=None,
-                cookies: list[dict[str, Any]] | list[SetCookieParam] | None=None,
+                cookies: list[dict[str, Any]] | list[Cookie] | None=None,
                 storage: dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | HttpCredentialsSettings | None=None,
@@ -194,7 +192,7 @@ class LacusCore():
                 proxy: str | dict[str, str] | None=None,
                 socks5_dns_resolver: str | list[str] | None=None,
                 general_timeout_in_sec: int | None=None,
-                cookies: str | dict[str, str] | list[dict[str, Any]] | list[SetCookieParam] | list[Cookie] | None=None,
+                cookies: str | dict[str, str] | list[dict[str, Any]] | list[Cookie] | None=None,
                 storage: dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | HttpCredentialsSettings | None=None,
@@ -553,7 +551,7 @@ class LacusCore():
                 else:
                     browser_engine = 'webkit'
 
-            cookies: list[SetCookieParam] = []
+            cookies: list[Cookie] = []
             if to_capture.cookies:
                 # In order to properly pass the cookies to playwright,
                 # each of then must have a name, a value and either a domain + path or a URL
@@ -562,15 +560,15 @@ class LacusCore():
                 # with the hostname of the URL we try to capture and the path with "/"
                 # NOTE: these changes can only be done here because we need the URL.
                 for cookie in to_capture.cookies:
-                    if 'name' not in cookie or 'value' not in cookie:
+                    if not cookie.name or not cookie.value:
                         logger.warning(f'Invalid cookie: {cookie}')
                         continue
-                    if 'domain' not in cookie and 'url' not in cookie:
+                    if not cookie.domain and not cookie.url:
                         if not splitted_url.hostname:
                             # If for any reason we cannot get the hostname there, ignore the cookie
                             continue
-                        cookie['domain'] = splitted_url.hostname
-                        cookie['path'] = '/'
+                        cookie.domain = splitted_url.hostname
+                        cookie.path = '/'
                     cookies.append(cookie)
             try:
                 logger.debug(f'Capturing {url}')
