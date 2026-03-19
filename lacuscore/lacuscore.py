@@ -142,7 +142,7 @@ class LacusCore():
         return bool(self.redis.ping())
 
     @overload
-    def enqueue(self, *, settings: dict[str, Any] | None=None) -> str:
+    def enqueue(self, *, settings: CaptureSettings | dict[str, Any] | None=None) -> str:
         ...
 
     @overload
@@ -183,7 +183,7 @@ class LacusCore():
         ...
 
     def enqueue(self, *,
-                settings: dict[str, Any] | None=None,
+                settings: CaptureSettings | dict[str, Any] | None=None,
                 url: str | None=None,
                 document_name: str | None=None, document: str | None=None,
                 depth: int=0,
@@ -263,7 +263,8 @@ class LacusCore():
             settings = {'depth': depth, 'rendered_hostname_only': rendered_hostname_only,
                         'url': url, 'document_name': document_name, 'document': document,
                         'browser': browser, 'device_name': device_name,
-                        'user_agent': user_agent, 'proxy': proxy, 'socks5_dns_resolver': socks5_dns_resolver,
+                        'user_agent': user_agent, 'proxy': proxy,
+                        'socks5_dns_resolver': socks5_dns_resolver,
                         'general_timeout_in_sec': general_timeout_in_sec,
                         'cookies': cookies, 'storage': storage, 'headers': headers,
                         'http_credentials': http_credentials, 'geolocation': geolocation,
@@ -278,11 +279,14 @@ class LacusCore():
                         'headless': headless if self.headed_allowed else True,
                         'init_script': init_script,
                         'max_retries': max_retries}
-        try:
-            to_enqueue = CaptureSettings(**settings)
-        except ValidationError as e:
-            self.master_logger.warning(f'Unable to validate settings: {e}.')
-            raise CaptureSettingsError('Invalid settings', e)
+        if isinstance(settings, dict):
+            try:
+                to_enqueue = CaptureSettings(**settings)
+            except ValidationError as e:
+                self.master_logger.warning(f'Unable to validate settings: {e}.')
+                raise CaptureSettingsError('Invalid settings', e)
+        else:
+            to_enqueue = settings
 
         hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
         if not force:
