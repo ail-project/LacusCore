@@ -246,14 +246,14 @@ files = [
 
 [[package]]
 name = "attrs"
-version = "25.4.0"
+version = "26.1.0"
 description = "Classes Without Boilerplate"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "attrs-25.4.0-py3-none-any.whl", hash = "sha256:adcf7e2a1fb3b36ac48d97835bb6d8ade15b8dcce26aba8bf1d14847b57a3373"},
-    {file = "attrs-25.4.0.tar.gz", hash = "sha256:16d5969b87f0859ef33a48b35d55ac1be6e42ae49d5e853b597db70c35c57e11"},
+    {file = "attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309"},
+    {file = "attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32"},
 ]
 
 [[package]]
@@ -1532,14 +1532,14 @@ files = [
 
 [[package]]
 name = "lookyloo-models"
-version = "0.1.0"
+version = "0.1.1"
 description = "All the Pydantic models used across Lookyloo"
 optional = false
 python-versions = "<3.15,>=3.10"
 groups = ["main"]
 files = [
-    {file = "lookyloo_models-0.1.0-py3-none-any.whl", hash = "sha256:98502928ea7766c485f04cc4dd96e710099413b88d075e7eab14babcdfb35be8"},
-    {file = "lookyloo_models-0.1.0.tar.gz", hash = "sha256:4771ec67175743c2a6f150a9e91e1b1ced5479c37d4597609db3fac015003837"},
+    {file = "lookyloo_models-0.1.1-py3-none-any.whl", hash = "sha256:b4daeccb4d434a5a75f770d9abbf82bbd4938e28a0ec66c706d1fc9cbc48a865"},
+    {file = "lookyloo_models-0.1.1.tar.gz", hash = "sha256:afe13877149c05fb266dfd33739531b94f1f707f9a373efc2070b4a8b0acb69f"},
 ]
 
 [package.dependencies]

@@ -455,7 +455,7 @@ class LacusCore():
                 raise CaptureError(f'No capture settings for {uuid}')
 
             try:
-                to_capture = CaptureSettings(**{k.decode(): v.decode() for k, v in _to_capture.items()})  # type: ignore[arg-type]
+                to_capture = CaptureSettings(**{k.decode(): v.decode() for k, v in _to_capture.items()})
             except ValidationError as e:
                 logger.warning(f'Settings invalid: {e}')
                 raise CaptureSettingsError('Invalid settings', e)
