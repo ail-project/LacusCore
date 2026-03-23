@@ -1532,14 +1532,14 @@ files = [
 
 [[package]]
 name = "lookyloo-models"
-version = "0.1.1"
+version = "0.1.3"
 description = "All the Pydantic models used across Lookyloo"
 optional = false
-python-versions = "<3.15,>=3.10"
+python-versions = "<4,>=3.10"
 groups = ["main"]
 files = [
-    {file = "lookyloo_models-0.1.1-py3-none-any.whl", hash = "sha256:b4daeccb4d434a5a75f770d9abbf82bbd4938e28a0ec66c706d1fc9cbc48a865"},
-    {file = "lookyloo_models-0.1.1.tar.gz", hash = "sha256:afe13877149c05fb266dfd33739531b94f1f707f9a373efc2070b4a8b0acb69f"},
+    {file = "lookyloo_models-0.1.3-py3-none-any.whl", hash = "sha256:ce35aa92ec00f04cb5119ce95df910d234a0a7e34818a4e357cfe43fc4586139"},
+    {file = "lookyloo_models-0.1.3.tar.gz", hash = "sha256:1c91c4dcfdcbb0382fcce7998434f7d7426768f931cf79f1cbe9d583d8dc4c6e"},
 ]
 
 [package.dependencies]
@@ -2194,14 +2194,14 @@ black = ["black (>=25.9.0)"]
 
 [[package]]
 name = "playwrightcapture"
-version = "1.37.1"
+version = "1.37.2"
 description = "A simple library to capture websites using playwright"
 optional = false
 python-versions = "<3.15,>=3.10"
 groups = ["main"]
 files = [
-    {file = "playwrightcapture-1.37.1-py3-none-any.whl", hash = "sha256:69590d6f0801d7e71325647f9d54cdb02ad6cc873faa3d7ef8220c2b889a018b"},
-    {file = "playwrightcapture-1.37.1.tar.gz", hash = "sha256:fc61f5063e7a5e5dd1253b904afbb6dd3ecf7f40829d2467d50b320fa2b310a6"},
+    {file = "playwrightcapture-1.37.2-py3-none-any.whl", hash = "sha256:81dbb20d417adf661520d73744995ff4eaf14adeae02cf6e63066e41cd18b8d8"},
+    {file = "playwrightcapture-1.37.2.tar.gz", hash = "sha256:ae50f40fd343f62a58921765c63049b8b6b621dabedc8d089aee305b900a8ef3"},
 ]
 
 [package.dependencies]
@@ -2223,7 +2223,7 @@ setuptools = ">=82.0.1"
 SpeechRecognition = {version = ">=3.15.1", optional = true, markers = "extra == \"recaptcha\""}
 typing-extensions = {version = ">=4.12.2,<5.0.0", markers = "python_version < \"3.12\""}
 tzdata = ">=2025.3"
-w3lib = ">=2.4.0"
+w3lib = ">=2.4.1"
 
 [package.extras]
 recaptcha = ["SpeechRecognition (>=3.15.1)", "pydub-ng (>=0.2.0)"]
@@ -3715,14 +3715,14 @@ zstd = ["backports-zstd (>=1.0.0) ; python_version < \"3.14\""]
 
 [[package]]
 name = "w3lib"
-version = "2.4.0"
+version = "2.4.1"
 description = "Library of web-related functions"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "w3lib-2.4.0-py3-none-any.whl", hash = "sha256:260b5a22aeb86ae73213857f69ed20829a45150f8d5b12050b1f02ada414db79"},
-    {file = "w3lib-2.4.0.tar.gz", hash = "sha256:e233ad21649b69d0e047a10f30181ae9677524a29f6f71f6f3c758dc0c8d2648"},
+    {file = "w3lib-2.4.1-py3-none-any.whl", hash = "sha256:40930132907e68de906a5b89331ab8c8ff4f01bd35b5539ef7896017d814138d"},
+    {file = "w3lib-2.4.1.tar.gz", hash = "sha256:8dd69ee39ff6398d708c793abc779c334a69bac7cee1cdf71736c669ed6be864"},
 ]
 
 [[package]]
@@ -3874,4 +3874,4 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.15"
-content-hash = "4be35559eed05dbf7403f93b905a714915ecb5e4fc1d60c38257dd8f9069f832"
+content-hash = "ce32840dd7eebcc08aebf9e3acecac171621d30d4262b6de221f0019eade4262"

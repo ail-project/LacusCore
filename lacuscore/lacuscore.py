@@ -281,7 +281,7 @@ class LacusCore():
                         'max_retries': max_retries}
         if isinstance(settings, dict):
             try:
-                to_enqueue = CaptureSettings(**settings)
+                to_enqueue = CaptureSettings.model_validate(settings)
             except ValidationError as e:
                 self.master_logger.warning(f'Unable to validate settings: {e}.')
                 raise CaptureSettingsError('Invalid settings', e)
@@ -446,16 +446,24 @@ class LacusCore():
         retry = False
         try:
             result: CaptureResponse = {}
-            _to_capture: dict[bytes, Any] = {}
             url: str = ''
-            _to_capture = self.redis.hgetall(f'lacus:capture_settings:{uuid}')
+            _to_capture_b = self.redis.hgetall(f'lacus:capture_settings:{uuid}')
 
-            if not _to_capture:
+            if not _to_capture_b:
                 result = {'error': f'No capture settings for {uuid}'}
                 raise CaptureError(f'No capture settings for {uuid}')
 
+            _to_capture = {k.decode(): v.decode() for k, v in _to_capture_b.items()}
+            _domain: str | None = None
+            if 'url' in _to_capture and _to_capture['url']:
+                # allows to pass the right context for cookies provided as {name: value}
+                try:
+                    _domain = urlsplit(_to_capture['url']).hostname
+                except Exception:
+                    # not capturing a url, ignore
+                    pass
             try:
-                to_capture = CaptureSettings(**{k.decode(): v.decode() for k, v in _to_capture.items()})
+                to_capture = CaptureSettings.model_validate(_to_capture, context={'domain': _domain})
             except ValidationError as e:
                 logger.warning(f'Settings invalid: {e}')
                 raise CaptureSettingsError('Invalid settings', e)
@@ -555,25 +563,6 @@ class LacusCore():
                 else:
                     browser_engine = 'webkit'
 
-            cookies: list[Cookie] = []
-            if to_capture.cookies:
-                # In order to properly pass the cookies to playwright,
-                # each of then must have a name, a value and either a domain + path or a URL
-                # Name and value are mandatory, and we cannot auto-fill them.
-                # If the cookie doesn't have a domain + path OR a URL, we fill the domain
-                # with the hostname of the URL we try to capture and the path with "/"
-                # NOTE: these changes can only be done here because we need the URL.
-                for cookie in to_capture.cookies:
-                    if not cookie.name or not cookie.value:
-                        logger.warning(f'Invalid cookie: {cookie}')
-                        continue
-                    if not cookie.domain and not cookie.url:
-                        if not splitted_url.hostname:
-                            # If for any reason we cannot get the hostname there, ignore the cookie
-                            continue
-                        cookie.domain = splitted_url.hostname
-                        cookie.path = '/'
-                    cookies.append(cookie)
             try:
                 logger.debug(f'Capturing {url}')
                 stats_pipeline.sadd(f'stats:{today}:captures', url)
@@ -590,12 +579,12 @@ class LacusCore():
                         uuid=uuid) as capture:
                     # required by Mypy: https://github.com/python/mypy/issues/3004
                     capture.headers = to_capture.headers
-                    capture.cookies = cookies  # type: ignore[assignment]
+                    capture.cookies = [c.model_dump(exclude_none=True) for c in to_capture.cookies] if to_capture.cookies else None
                     capture.storage = to_capture.storage
-                    capture.viewport = to_capture.viewport.model_dump() if to_capture.viewport else None
+                    capture.viewport = to_capture.viewport.model_dump(exclude_none=True) if to_capture.viewport else None
                     capture.user_agent = to_capture.user_agent
-                    capture.http_credentials = to_capture.http_credentials.model_dump() if to_capture.http_credentials else None
-                    capture.geolocation = to_capture.geolocation.model_dump() if to_capture.geolocation else None
+                    capture.http_credentials = to_capture.http_credentials.model_dump(exclude_none=True) if to_capture.http_credentials else None
+                    capture.geolocation = to_capture.geolocation.model_dump(exclude_none=True) if to_capture.geolocation else None
                     capture.timezone_id = to_capture.timezone_id
                     capture.locale = to_capture.locale
                     capture.color_scheme = to_capture.color_scheme
