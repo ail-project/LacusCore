@@ -1532,14 +1532,14 @@ files = [
 
 [[package]]
 name = "lookyloo-models"
-version = "0.1.3"
+version = "0.1.4"
 description = "All the Pydantic models used across Lookyloo"
 optional = false
 python-versions = "<4,>=3.10"
 groups = ["main"]
 files = [
-    {file = "lookyloo_models-0.1.3-py3-none-any.whl", hash = "sha256:ce35aa92ec00f04cb5119ce95df910d234a0a7e34818a4e357cfe43fc4586139"},
-    {file = "lookyloo_models-0.1.3.tar.gz", hash = "sha256:1c91c4dcfdcbb0382fcce7998434f7d7426768f931cf79f1cbe9d583d8dc4c6e"},
+    {file = "lookyloo_models-0.1.4-py3-none-any.whl", hash = "sha256:59fad65f1fad9b79f677703da18ef691c0d05c4a5d79708ea043be369fb7b125"},
+    {file = "lookyloo_models-0.1.4.tar.gz", hash = "sha256:d6ff248d5ba4489ec6cfbff20ada38d363c737a1a024a3f9277f7f0a14bbdc22"},
 ]
 
 [package.dependencies]
@@ -2194,14 +2194,14 @@ black = ["black (>=25.9.0)"]
 
 [[package]]
 name = "playwrightcapture"
-version = "1.37.2"
+version = "1.37.3"
 description = "A simple library to capture websites using playwright"
 optional = false
 python-versions = "<3.15,>=3.10"
 groups = ["main"]
 files = [
-    {file = "playwrightcapture-1.37.2-py3-none-any.whl", hash = "sha256:81dbb20d417adf661520d73744995ff4eaf14adeae02cf6e63066e41cd18b8d8"},
-    {file = "playwrightcapture-1.37.2.tar.gz", hash = "sha256:ae50f40fd343f62a58921765c63049b8b6b621dabedc8d089aee305b900a8ef3"},
+    {file = "playwrightcapture-1.37.3-py3-none-any.whl", hash = "sha256:394c6238febda218e2066a1b444d0bd28106cf32331e5e20a52cb1706a6e0bc0"},
+    {file = "playwrightcapture-1.37.3.tar.gz", hash = "sha256:117245b95eb9a59984e9b60e70fd7e687f284d4c69a92a7731382acf3b2fad92"},
 ]
 
 [package.dependencies]
@@ -2211,7 +2211,7 @@ async-timeout = {version = ">=5.0.1", markers = "python_version < \"3.11\""}
 beautifulsoup4 = {version = ">=4.14.3", extras = ["charset-normalizer", "lxml"]}
 dateparser = ">=1.3.0"
 dnspython = ">=2.7.0,<3.0.0"
-lookyloo-models = ">=0.1.0,<0.2.0"
+lookyloo-models = ">=0.1.4,<0.2.0"
 orjson = ">=3.11.4,<4.0.0"
 playwright = ">=1.58.0"
 playwright-stealth = ">=2.0.2"
@@ -3521,14 +3521,14 @@ types-pyOpenSSL = "*"
 
 [[package]]
 name = "types-requests"
-version = "2.32.4.20260107"
+version = "2.32.4.20260324"
 description = "Typing stubs for requests"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["dev"]
 files = [
-    {file = "types_requests-2.32.4.20260107-py3-none-any.whl", hash = "sha256:b703fe72f8ce5b31ef031264fe9395cac8f46a04661a79f7ed31a80fb308730d"},
-    {file = "types_requests-2.32.4.20260107.tar.gz", hash = "sha256:018a11ac158f801bfa84857ddec1650750e393df8a004a8a9ae2a9bec6fcb24f"},
+    {file = "types_requests-2.32.4.20260324-py3-none-any.whl", hash = "sha256:f83ef2deb284fe99a249b8b0b0a3e4b9809e01ff456063c4df0aac7670c07ab9"},
+    {file = "types_requests-2.32.4.20260324.tar.gz", hash = "sha256:33a2a9ccb1de7d4e4da36e347622c35418f6761269014cc32857acabd5df739e"},
 ]
 
 [package.dependencies]
@@ -3874,4 +3874,4 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.15"
-content-hash = "ce32840dd7eebcc08aebf9e3acecac171621d30d4262b6de221f0019eade4262"
+content-hash = "dd09c069225a22b27f09dd6b8ba86a0b64c3c49615344f1653f7e31880ceda02"
