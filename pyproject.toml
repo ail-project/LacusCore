@@ -21,7 +21,7 @@ dependencies = [
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
     "pydantic (>=2.12.5)",
     "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\"",
-    "lookyloo-models (>=0.1.6,<0.2.0)"
+    "lookyloo-models (>=0.1.8)"
 ]
 
 [project.urls]
@@ -47,7 +47,7 @@ docs = ["Sphinx (>=9.1.0) ; python_version >= \"3.12\""]
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.19.1"
 types-redis = {version = "^4.6.0.20241004"}
-types-requests = "^2.32.4.20260324"
+types-requests = "^2.33.0.20260327"
 types-beautifulsoup4 = "^4.12.0.20250516"
 pytest = "^9.0.2"
 
