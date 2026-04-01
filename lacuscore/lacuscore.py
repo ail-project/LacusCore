@@ -404,6 +404,93 @@ class LacusCore():
             return CaptureStatus.DONE
         return CaptureStatus.UNKNOWN
 
+    def _apply_capture_settings(self, capture: Capture, to_capture: CaptureSettings) -> None:
+        # required by Mypy: https://github.com/python/mypy/issues/3004
+        capture.headers = to_capture.headers
+        capture.cookies = [c.model_dump(exclude_none=True) for c in to_capture.cookies] if to_capture.cookies else None
+        capture.storage = to_capture.storage
+        capture.viewport = to_capture.viewport.model_dump(exclude_none=True) if to_capture.viewport else None
+        capture.user_agent = to_capture.user_agent
+        capture.http_credentials = to_capture.http_credentials.model_dump(exclude_none=True) if to_capture.http_credentials else None
+        capture.geolocation = to_capture.geolocation.model_dump(exclude_none=True) if to_capture.geolocation else None
+        capture.timezone_id = to_capture.timezone_id
+        capture.locale = to_capture.locale
+        capture.color_scheme = to_capture.color_scheme
+        capture.java_script_enabled = to_capture.java_script_enabled
+
+    async def _initialize_capture_context(self, capture: Capture, logger: LacusCoreLogAdapter, url: str) -> None:
+        # make sure the initialization doesn't take too long
+        init_timeout = max(self.max_capture_time / 10, 5)
+        try:
+            async with timeout(init_timeout) as initialize_timeout:
+                await capture.initialize_context()
+        except (TimeoutError, asyncio.exceptions.TimeoutError):
+            timeout_expired(initialize_timeout, logger, 'Initializing took too long.')
+            logger.warning(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
+            raise RetryCapture(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
+
+    async def _run_standard_capture(self, *, uuid: str, to_capture: CaptureSettings,
+                                    url: str, browser_engine: BROWSER,
+                                    proxy: dict[str, str] | str | None,
+                                    logger: LacusCoreLogAdapter,
+                                    stats_pipeline: Any, today: str) -> tuple[CaptureResponse, bool]:
+        should_retry = False
+
+        try:
+            logger.debug(f'Capturing {url}')
+            stats_pipeline.sadd(f'stats:{today}:captures', url)
+            async with Capture(
+                    browser=browser_engine,
+                    device_name=to_capture.device_name,
+                    proxy=proxy,
+                    socks5_dns_resolver=to_capture.socks5_dns_resolver,
+                    general_timeout_in_sec=to_capture.general_timeout_in_sec,
+                    loglevel=self.master_logger.getEffectiveLevel(),
+                    headless=to_capture.headless,
+                    init_script=to_capture.init_script,
+                    tt_settings=self.tt_settings,
+                    uuid=uuid) as capture:
+                self._apply_capture_settings(capture, to_capture)
+                await self._initialize_capture_context(capture, logger, url)
+
+                try:
+                    async with timeout(self.max_capture_time) as capture_timeout:
+                        playwright_result = await capture.capture_page(
+                            url, referer=to_capture.referer,
+                            depth=to_capture.depth,
+                            rendered_hostname_only=to_capture.rendered_hostname_only,
+                            with_screenshot=to_capture.with_screenshot,
+                            with_favicon=to_capture.with_favicon,
+                            allow_tracking=to_capture.allow_tracking,
+                            with_trusted_timestamps=to_capture.with_trusted_timestamps,
+                            max_depth_capture_time=self.max_capture_time,
+                            final_wait=to_capture.final_wait)
+                except (TimeoutError, asyncio.exceptions.TimeoutError):
+                    timeout_expired(capture_timeout, logger, 'Capture took too long.')
+                    logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+                    raise RetryCapture(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+
+                result = cast(CaptureResponse, playwright_result)
+                if 'error' in result and 'error_name' in result:
+                    # generate stats
+                    if result['error_name'] is not None:
+                        stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
+                should_retry = capture.should_retry
+                return result, should_retry
+        except RetryCapture:
+            raise
+        except (PlaywrightCaptureException, InvalidPlaywrightParameter) as e:
+            logger.warning(f'Invalid parameters for the capture of {url} - {e}')
+            raise CaptureError(f'Invalid parameters for the capture of {url} - {e}')
+        except asyncio.CancelledError:
+            logger.warning(f'The capture of {url} has been cancelled.')
+            # The capture can be canceled if it has been running for way too long.
+            # We can give it another short.
+            raise RetryCapture(f'The capture of {url} has been cancelled.')
+        except Exception as e:
+            logger.exception(f'Something went poorly {url} - {e}')
+            raise CaptureError(f'Something went poorly {url} - {e}')
+
     async def consume_queue(self, max_consume: int) -> AsyncIterator[Task[None]]:
         """Trigger the capture for captures with the highest priority. Up to max_consume.
 
@@ -563,89 +650,27 @@ class LacusCore():
                 else:
                     browser_engine = 'webkit'
 
-            try:
-                logger.debug(f'Capturing {url}')
-                stats_pipeline.sadd(f'stats:{today}:captures', url)
-                async with Capture(
-                        browser=browser_engine,
-                        device_name=to_capture.device_name,
-                        proxy=proxy,
-                        socks5_dns_resolver=to_capture.socks5_dns_resolver,
-                        general_timeout_in_sec=to_capture.general_timeout_in_sec,
-                        loglevel=self.master_logger.getEffectiveLevel(),
-                        headless=to_capture.headless,
-                        init_script=to_capture.init_script,
-                        tt_settings=self.tt_settings,
-                        uuid=uuid) as capture:
-                    # required by Mypy: https://github.com/python/mypy/issues/3004
-                    capture.headers = to_capture.headers
-                    capture.cookies = [c.model_dump(exclude_none=True) for c in to_capture.cookies] if to_capture.cookies else None
-                    capture.storage = to_capture.storage
-                    capture.viewport = to_capture.viewport.model_dump(exclude_none=True) if to_capture.viewport else None
-                    capture.user_agent = to_capture.user_agent
-                    capture.http_credentials = to_capture.http_credentials.model_dump(exclude_none=True) if to_capture.http_credentials else None
-                    capture.geolocation = to_capture.geolocation.model_dump(exclude_none=True) if to_capture.geolocation else None
-                    capture.timezone_id = to_capture.timezone_id
-                    capture.locale = to_capture.locale
-                    capture.color_scheme = to_capture.color_scheme
-                    capture.java_script_enabled = to_capture.java_script_enabled
+            result, should_retry = await self._run_standard_capture(
+                uuid=uuid,
+                to_capture=to_capture,
+                url=url,
+                browser_engine=browser_engine,
+                proxy=proxy,
+                logger=logger,
+                stats_pipeline=stats_pipeline,
+                today=today,
+            )
 
-                    # make sure the initialization doesn't take too long
-                    init_timeout = max(self.max_capture_time / 10, 5)
-                    try:
-                        async with timeout(init_timeout) as initialize_timeout:
-                            await capture.initialize_context()
-                    except (TimeoutError, asyncio.exceptions.TimeoutError):
-                        timeout_expired(initialize_timeout, logger, 'Initializing took too long.')
-                        logger.warning(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
-                        raise RetryCapture(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
-
-                    try:
-                        async with timeout(self.max_capture_time) as capture_timeout:
-                            playwright_result = await capture.capture_page(
-                                url, referer=to_capture.referer,
-                                depth=to_capture.depth,
-                                rendered_hostname_only=to_capture.rendered_hostname_only,
-                                with_screenshot=to_capture.with_screenshot,
-                                with_favicon=to_capture.with_favicon,
-                                allow_tracking=to_capture.allow_tracking,
-                                with_trusted_timestamps=to_capture.with_trusted_timestamps,
-                                max_depth_capture_time=self.max_capture_time,
-                                final_wait=to_capture.final_wait)
-                    except (TimeoutError, asyncio.exceptions.TimeoutError):
-                        timeout_expired(capture_timeout, logger, 'Capture took too long.')
-                        logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
-                        raise RetryCapture(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
-                    result = cast(CaptureResponse, playwright_result)
-                    if 'error' in result and 'error_name' in result:
-                        # generate stats
-                        if result['error_name'] is not None:
-                            stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
-            except RetryCapture as e:
-                raise e
-            except (PlaywrightCaptureException, InvalidPlaywrightParameter) as e:
-                logger.warning(f'Invalid parameters for the capture of {url} - {e}')
-                result = {'error': f'Invalid parameters for the capture of {url} - {e}'}
-                raise CaptureError(f'Invalid parameters for the capture of {url} - {e}')
-            except asyncio.CancelledError:
-                logger.warning(f'The capture of {url} has been cancelled.')
-                result = {'error': f'The capture of {url} has been cancelled.'}
-                # The capture can be canceled if it has been running for way too long.
-                # We can give it another short.
-                raise RetryCapture(f'The capture of {url} has been cancelled.')
-            except Exception as e:
-                logger.exception(f'Something went poorly {url} - {e}')
-                result = {'error': f'Something went poorly {url} - {e}'}
-                raise CaptureError(f'Something went poorly {url} - {e}')
-
-            if capture.should_retry:
+            if should_retry:
                 # PlaywrightCapture considers this capture elligible for a retry
                 logger.info('PlaywrightCapture considers it elligible for a retry.')
                 raise RetryCapture('PlaywrightCapture considers it elligible for a retry.')
             elif self.redis.exists(f'lacus:capture_retry:{uuid}'):
                 # this is a retry that worked
                 stats_pipeline.sadd(f'stats:{today}:retry_success', url)
-        except RetryCapture:
+        except RetryCapture as e:
+            if not result and str(e):
+                result = {'error': str(e)}
             if max_retries == 0:
                 error_msg = result['error'] if result.get('error') else 'Unknown error'
                 logger.info(f'Retries disabled for {url}: {error_msg}')
@@ -669,9 +694,9 @@ class LacusCore():
                         error_msg = result['error'] if result.get('error') else 'Unknown error'
                         logger.info(f'Retried too many times {url}: {error_msg}')
                         stats_pipeline.sadd(f'stats:{today}:retry_failed', url)
-        except CaptureError:
+        except CaptureError as e:
             if not result:
-                result = {'error': "No result key, shouldn't happen"}
+                result = {'error': str(e) if str(e) else "No result key, shouldn't happen"}
                 logger.exception(f'Unable to capture: {result["error"]}')
             if url:
                 logger.warning(f'Unable to capture {url}: {result["error"]}')
@@ -743,12 +768,13 @@ class LacusCore():
                     stats_pipeline.zincrby(f'stats:{today}:errors', 1, 'Redis Connection')
                     logger.critical('Unable to connect to redis and to push the result of the capture.')
 
-            # Expire stats in 10 days
-            expire_time = timedelta(days=10)
-            stats_pipeline.expire(f'stats:{today}:errors', expire_time)
-            stats_pipeline.expire(f'stats:{today}:retry_failed', expire_time)
-            stats_pipeline.expire(f'stats:{today}:retry_success', expire_time)
-            stats_pipeline.expire(f'stats:{today}:captures', expire_time)
+            # Expire stats in 10 days. redis-py expects the TTL as an integer
+            # number of seconds, not a timedelta instance.
+            expire_seconds = int(timedelta(days=10).total_seconds())
+            stats_pipeline.expire(f'stats:{today}:errors', expire_seconds)
+            stats_pipeline.expire(f'stats:{today}:retry_failed', expire_seconds)
+            stats_pipeline.expire(f'stats:{today}:retry_success', expire_seconds)
+            stats_pipeline.expire(f'stats:{today}:captures', expire_seconds)
             stats_pipeline.execute()
 
     def _store_capture_response(self, pipeline: Redis, capture_uuid: str, results: CaptureResponse,   # type: ignore[type-arg]
@@ -790,12 +816,27 @@ class LacusCore():
             logger.exception('Error while pickling the results.')
             results['error'] = "Error while saving the results (unable to pickle), please retry."
 
+        direct_text_fields = {'last_redirected_url', 'error', 'error_name', 'html', 'downloaded_filename'}
+        direct_bytes_fields = {'png', 'downloaded_file'}
+
         for key in results.keys():
             if key in ['har', 'cookies', 'storage', 'trusted_timestamps', 'potential_favicons',
                        'html', 'frames', 'children'] or not results.get(key):
                 continue
-            # these entries can be stored directly
-            hash_to_set[key] = results[key]  # type: ignore[literal-required]
+            value = results[key]  # type: ignore[literal-required]
+            # These entries can usually be stored directly, but Redis hash values
+            # must be serialized to primitive wire types first.
+            if key == 'status':
+                hash_to_set[key] = int(value)  # type: ignore[arg-type]
+            elif key == 'runtime':
+                hash_to_set[key] = float(value)  # type: ignore[arg-type]
+            elif key in direct_text_fields:
+                hash_to_set[key] = str(value)
+            elif key in direct_bytes_fields:
+                hash_to_set[key] = bytes(value) if isinstance(value, bytearray | memoryview) else value
+            else:
+                logger.warning(f'Unexpected capture response type for {key}, serializing defensively.')
+                hash_to_set[key] = pickle.dumps(value)
         if hash_to_set:
             pipeline.hset(root_key, mapping=hash_to_set)  # type: ignore[arg-type]
             # Make sure the key expires
