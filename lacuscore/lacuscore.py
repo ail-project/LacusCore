@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 import logging
 import os
@@ -16,7 +17,7 @@ import unicodedata
 
 from asyncio import Task
 from base64 import b64decode, b64encode
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from tempfile import NamedTemporaryFile
 from typing import Literal, Any, overload, cast
@@ -44,8 +45,11 @@ from . import task_logger
 from .helpers import (
     LacusCoreException,
     LacusCoreLogAdapter, CaptureError, RetryCapture,
-    CaptureStatus, CaptureResponse, CaptureResponseJson,
-    SessionStatus)
+    CaptureStatus, SessionStatus, CaptureResponse, CaptureResponseJson,
+    SessionMetadata)
+from .session import Session, SessionManager
+from .session_store import SessionMetadataStore
+from .xpra_session import XpraSessionManager
 
 if sys.version_info < (3, 11):
     from async_timeout import timeout
@@ -134,6 +138,7 @@ class LacusCore():
         self.max_retries = max_retries
         self.headed_allowed = headed_allowed
         self.interactive_allowed = interactive_allowed
+        self.session_store = SessionMetadataStore(self.redis)
 
         self.dnsresolver: Resolver = Resolver()
         self.dnsresolver.cache = Cache(900)
@@ -420,6 +425,93 @@ class LacusCore():
             return CaptureStatus.DONE
         return CaptureStatus.UNKNOWN
 
+    async def _stop_live_session_backend(self, manager: SessionManager, session: Session) -> bool:
+        return await asyncio.get_running_loop().run_in_executor(
+            None,
+            functools.partial(manager.stop_session, session),
+        )
+
+    def _get_session_manager(self, backend_type: str | None=None) -> SessionManager:
+        resolved_backend = backend_type or XpraSessionManager.backend_type
+        if resolved_backend == XpraSessionManager.backend_type:
+            return XpraSessionManager()
+        raise LacusCoreException(f'Unknown interactive session backend: {resolved_backend}')
+
+    def get_session_metadata(self, uuid: str) -> SessionMetadata | None:
+        record = self.session_store.read(uuid)
+        if not record:
+            return None
+        return dict(record.metadata)
+
+    def get_session_backend_metadata(self, uuid: str) -> dict[str, Any] | None:
+        """Return backend-specific metadata for trusted session transport callers."""
+        record = self.session_store.read(uuid)
+        if not record:
+            return None
+        return dict(record.backend_metadata)
+
+    def request_session_capture(self, uuid: str) -> SessionMetadata | None:
+        """Mark an interactive session as ready for final capture.
+
+        Returns the updated metadata, or None if no session exists.
+        """
+        record = self.session_store.request_finish(uuid)
+        if not record:
+            return None
+        return dict(record.metadata)
+
+    def stop_session(self, uuid: str, *, status: SessionStatus = SessionStatus.STOPPED) -> None:
+        """Stop an interactive session associated with a capture UUID."""
+        record = self.session_store.read(uuid)
+        if not record:
+            return
+
+        metadata = record.metadata
+        try:
+            created_at_ts = int(metadata.get('created_at', 0)) if metadata.get('created_at') is not None else 0
+            expires_at_ts = int(metadata.get('expires_at', 0)) if metadata.get('expires_at') is not None else 0
+        except (TypeError, ValueError):
+            created_at_ts = 0
+            expires_at_ts = 0
+
+        manager = self._get_session_manager(cast(str | None, metadata.get('backend_type')))
+        session = manager.restore_session(
+            created_at=datetime.fromtimestamp(created_at_ts, UTC) if created_at_ts else datetime.fromtimestamp(0, UTC),
+            expires_at=datetime.fromtimestamp(expires_at_ts, UTC) if expires_at_ts else datetime.fromtimestamp(0, UTC),
+            view_url=str(metadata['view_url']) if metadata.get('view_url') else None,
+            backend_metadata=record.backend_metadata,
+        )
+
+        if not manager.stop_session(session):
+            backend_type = cast(str, metadata.get('backend_type', 'unknown'))
+            self.master_logger.warning('Unable to confirm %s shutdown for interactive session %s.', backend_type, uuid)
+
+        self.session_store.mark_terminal(uuid, metadata, status=status, expire_seconds=60)
+
+    def cleanup_expired_sessions(self) -> None:
+        """Stop interactive sessions whose TTL has expired.
+
+        This method scans all interactive session metadata keys and, for any
+        session whose ``expires_at`` is in the past and whose status is not
+        already terminal ("stopped" or "expired"), stops the underlying xpra
+        process and marks the status as "expired".
+
+        It is designed to be called periodically by an external scheduler.
+        """
+
+        now_ts = int(time.time())
+        try:
+            expired_sessions = self.session_store.scan_expired(now_ts)
+        except RedisConnectionError as e:
+            self.master_logger.warning(f'Unable to scan interactive sessions: {e}')
+            return
+
+        for uuid, _record in expired_sessions:
+            try:
+                self.stop_session(uuid, status=SessionStatus.EXPIRED)
+            except Exception as e:  # pragma: no cover - defensive
+                self.master_logger.warning(f'Unable to expire interactive session {uuid}: {e}')
+
     def _apply_capture_settings(self, capture: Capture, to_capture: CaptureSettings) -> None:
         # required by Mypy: https://github.com/python/mypy/issues/3004
         capture.headers = to_capture.headers
@@ -444,6 +536,158 @@ class LacusCore():
             timeout_expired(initialize_timeout, logger, 'Initializing took too long.')
             logger.warning(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
             raise RetryCapture(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
+
+    async def _open_interactive_page(self, capture: Capture, to_capture: CaptureSettings,
+                                     url: str, logger: LacusCoreLogAdapter) -> tuple[Any, Any]:
+        try:
+            page = await capture.context.new_page()
+            page_capture_state = await capture.setup_page_capture(page)
+            await page.goto(
+                url,
+                wait_until='domcontentloaded',
+                referer=to_capture.referer if to_capture.referer else ''
+            )
+            try:
+                await page.bring_to_front()
+                logger.debug('Interactive page moved to front.')
+            except Exception as e:  # pragma: no cover - best-effort only
+                logger.warning(f'Unable to bring interactive page to front: {e}.')
+        except Exception as e:
+            logger.warning(f'Unable to create initial interactive page for {url}: {e}')
+            raise RetryCapture(f'Unable to create initial interactive page for {url}: {e}')
+
+        return page, page_capture_state
+
+    async def _run_interactive_capture(self, *, uuid: str, to_capture: CaptureSettings,
+                                       url: str, browser_engine: BROWSER,
+                                       proxy: dict[str, str] | str | None,
+                                       logger: LacusCoreLogAdapter,
+                                       stats_pipeline: Any, today: str) -> CaptureResponse:
+        if not self.interactive_allowed:
+            raise CaptureError('Interactive captures are disabled by configuration.')
+        if not self.headed_allowed:
+            raise CaptureError('Interactive captures require headed_allowed=True.')
+
+        session_manager = self._get_session_manager()
+        session = await asyncio.get_running_loop().run_in_executor(
+            None,
+            functools.partial(session_manager.start_session, session_name=uuid, ttl=to_capture.interactive_ttl),
+        )
+
+        metadata: SessionMetadata = {
+            'status': int(SessionStatus.STARTING),
+            'backend_type': session_manager.backend_type,
+            'created_at': int(session.created_at.timestamp()),
+            'expires_at': int(session.expires_at.timestamp()),
+        }
+        if session.view_url:
+            metadata['view_url'] = session.view_url
+        backend_metadata = dict(session_manager.serialize_backend_metadata(session))
+        metadata_ttl = max(1, int(to_capture.interactive_ttl) + 60)
+        self.session_store.write(uuid, metadata, backend_metadata, expire_seconds=metadata_ttl)
+
+        try:
+            to_capture.headless = False
+
+            logger.debug(f'Initializing interactive session for {url}')
+            stats_pipeline.sadd(f'stats:{today}:captures', url)
+            capture_kwargs = dict(session_manager.get_capture_kwargs(session))
+
+            async with Capture(
+                    browser=browser_engine,
+                    device_name=to_capture.device_name,
+                    proxy=proxy,
+                    socks5_dns_resolver=to_capture.socks5_dns_resolver,
+                    general_timeout_in_sec=to_capture.general_timeout_in_sec,
+                    loglevel=self.master_logger.getEffectiveLevel(),
+                    headless=to_capture.headless,
+                    init_script=to_capture.init_script,
+                    tt_settings=self.tt_settings,
+                    uuid=uuid,
+                    **capture_kwargs) as capture:
+                self._apply_capture_settings(capture, to_capture)
+                await self._initialize_capture_context(capture, logger, url)
+                page, page_capture_state = await self._open_interactive_page(capture, to_capture, url, logger)
+
+                metadata['status'] = int(SessionStatus.READY)
+                self.session_store.write(uuid, metadata, backend_metadata, expire_seconds=metadata_ttl)
+
+                expires_at_ts = int(session.expires_at.timestamp())
+                poll_interval = 1.0
+
+                while True:
+                    await asyncio.sleep(poll_interval)
+                    now_ts = int(time.time())
+
+                    if expires_at_ts and now_ts >= expires_at_ts:
+                        self.session_store.mark_terminal(uuid, metadata, status=SessionStatus.EXPIRED, expire_seconds=60)
+                        await self._stop_live_session_backend(session_manager, session)
+                        return {
+                            'error': 'Interactive session expired before capture.',
+                            'status': CaptureStatus.DONE,
+                        }
+
+                    try:
+                        record = self.session_store.read(uuid)
+                    except RedisConnectionError as e:  # pragma: no cover - defensive
+                        logger.warning(f'Unable to poll interactive session metadata for {uuid}: {e}')
+                        continue
+
+                    if not record:
+                        await self._stop_live_session_backend(session_manager, session)
+                        return {
+                            'error': 'Interactive session metadata missing; assuming stopped.',
+                            'status': CaptureStatus.DONE,
+                        }
+
+                    record_metadata = record.metadata
+                    status_val = int(record_metadata.get('status', int(SessionStatus.UNKNOWN)))
+                    finish_requested = int(record_metadata.get(self.session_store.finish_key, 0) or 0) > 0
+
+                    if finish_requested:
+                        try:
+                            async with timeout(self.max_capture_time) as capture_timeout:
+                                playwright_result = await capture.capture_current_page(
+                                    page,
+                                    rendered_hostname_only=to_capture.rendered_hostname_only,
+                                    with_screenshot=to_capture.with_screenshot,
+                                    with_favicon=to_capture.with_favicon,
+                                    with_trusted_timestamps=to_capture.with_trusted_timestamps,
+                                    page_capture_state=page_capture_state,
+                                )
+                        except (TimeoutError, asyncio.exceptions.TimeoutError):
+                            timeout_expired(capture_timeout, logger, 'Interactive capture took too long.')
+                            logger.warning(
+                                f'The interactive capture of {url} took longer than the allowed max capture time '
+                                f'({self.max_capture_time}s)'
+                            )
+                            raise RetryCapture(
+                                f'The interactive capture of {url} took longer than the allowed max capture time '
+                                f'({self.max_capture_time}s)'
+                            )
+
+                        result = cast(CaptureResponse, playwright_result)
+                        if start_time := self.redis.zscore('lacus:ongoing', uuid):
+                            runtime = time.time() - start_time
+                            logger.info(f'Interactive capture of {url} finished - Runtime: {runtime}s')
+                            result['runtime'] = runtime
+                        else:
+                            logger.info(f'Interactive capture of {url} finished - No Runtime.')
+
+                        self.session_store.mark_terminal(uuid, record_metadata, status=SessionStatus.STOPPED, expire_seconds=60)
+                        await self._stop_live_session_backend(session_manager, session)
+                        return result
+
+                    if status_val in (int(SessionStatus.STOPPED), int(SessionStatus.EXPIRED), int(SessionStatus.ERROR)):
+                        self.session_store.mark_terminal(uuid, record_metadata,
+                                                         status=SessionStatus(status_val),
+                                                         expire_seconds=60)
+                        await self._stop_live_session_backend(session_manager, session)
+                        return {'runtime': None, 'status': CaptureStatus.DONE}
+        except Exception:
+            self.session_store.mark_terminal(uuid, metadata, status=SessionStatus.ERROR, expire_seconds=60)
+            await self._stop_live_session_backend(session_manager, session)
+            raise
 
     async def _run_standard_capture(self, *, uuid: str, to_capture: CaptureSettings,
                                     url: str, browser_engine: BROWSER,
@@ -666,6 +910,18 @@ class LacusCore():
                 else:
                     browser_engine = 'webkit'
 
+            if getattr(to_capture, 'interactive', False):
+                result = await self._run_interactive_capture(
+                    uuid=uuid,
+                    to_capture=to_capture,
+                    url=url,
+                    browser_engine=browser_engine,
+                    proxy=proxy,
+                    logger=logger,
+                    stats_pipeline=stats_pipeline,
+                    today=today,
+                )
+                return
             result, should_retry = await self._run_standard_capture(
                 uuid=uuid,
                 to_capture=to_capture,
