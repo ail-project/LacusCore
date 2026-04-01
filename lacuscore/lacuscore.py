@@ -44,7 +44,8 @@ from . import task_logger
 from .helpers import (
     LacusCoreException,
     LacusCoreLogAdapter, CaptureError, RetryCapture,
-    CaptureStatus, CaptureResponse, CaptureResponseJson)
+    CaptureStatus, CaptureResponse, CaptureResponseJson,
+    SessionStatus)
 
 if sys.version_info < (3, 11):
     from async_timeout import timeout
@@ -114,6 +115,7 @@ class LacusCore():
                  only_global_lookups: bool=True,
                  max_retries: int=3,
                  headed_allowed: bool=False,
+                 interactive_allowed: bool=False,
                  tt_settings: TrustedTimestampSettings | None=None,
                  loglevel: str | int='INFO') -> None:
         self.master_logger = logging.getLogger(f'{self.__class__.__name__}')
@@ -131,6 +133,7 @@ class LacusCore():
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
         self.headed_allowed = headed_allowed
+        self.interactive_allowed = interactive_allowed
 
         self.dnsresolver: Resolver = Resolver()
         self.dnsresolver.cache = Cache(900)
@@ -172,6 +175,8 @@ class LacusCore():
                 with_trusted_timestamps: bool=False,
                 allow_tracking: bool=False,
                 headless: bool=True,
+                interactive: bool=False,
+                interactive_ttl: int=900,
                 max_retries: int | None=None,
                 init_script: str | None=None,
                 force: bool=False,
@@ -209,6 +214,8 @@ class LacusCore():
                 with_trusted_timestamps: bool=False,
                 allow_tracking: bool=False,
                 headless: bool=True,
+                interactive: bool=False,
+                interactive_ttl: int=900,
                 max_retries: int | None=None,
                 init_script: str | None=None,
                 force: bool=False,
@@ -247,7 +254,11 @@ class LacusCore():
         :param with_favicon: If True, PlaywrightCapture will attempt to get the potential favicons for the rendered URL. It is a dirty trick, see this issue for details: https://github.com/Lookyloo/PlaywrightCapture/issues/45
         :param with_trusted_timestamps: If True, PlaywrightCapture will trigger calls to a remote timestamp service. For that to work, this class must have been initialized with tt_settings. See RFC3161 for details: https://www.rfc-editor.org/rfc/rfc3161
         :param allow_tracking: If True, PlaywrightCapture will attempt to click through the cookie banners. It is totally dependent on the framework used on the website.
+        :param interactive: If True, the capture will be handled as an interactive session managed by xpra.
+        :param interactive_ttl: Time-to-live in seconds for an interactive session.
         :param headless: Whether to run the browser in headless mode. WARNING: requires to run in a graphical environment.
+        :param interactive: If True, the capture will be handled as an interactive session managed by xpra.
+        :param interactive_ttl: Time-to-live in seconds for an interactive session.
         :param max_retries: The maximum anount of retries for this capture
         :param init_script: A JavaScript that will be executed on each page of the capture.
         :param final_wait: The very last wait time, after the instrumentation is done.
@@ -274,6 +285,8 @@ class LacusCore():
                         'with_screenshot': with_screenshot, 'with_favicon': with_favicon,
                         'with_trusted_timestamps': with_trusted_timestamps,
                         'allow_tracking': allow_tracking,
+                        'interactive': interactive,
+                        'interactive_ttl': interactive_ttl,
                         'final_wait': final_wait,
                         # Quietly force it to true if headed is not allowed.
                         'headless': headless if self.headed_allowed else True,
@@ -287,6 +300,9 @@ class LacusCore():
                 raise CaptureSettingsError('Invalid settings', e)
         else:
             to_enqueue = settings
+
+        if to_enqueue.interactive and not self.interactive_allowed:
+            raise CaptureSettingsError('Interactive captures are disabled by configuration.')
 
         hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
         if not force:

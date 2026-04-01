@@ -52,6 +52,19 @@ class CaptureStatus(IntEnum):
     ONGOING = 2
 
 
+@unique
+class SessionStatus(IntEnum):
+    '''The status of an interactive session'''
+
+    UNKNOWN = -1
+    STARTING = 0
+    READY = 1
+    ERROR = 2
+    STOPPED = 3
+    EXPIRED = 4
+    CAPTURE_REQUESTED = 5
+
+
 class CaptureResponse(PlaywrightCaptureResponse, TypedDict, total=False):
     '''A capture made by Lacus. With the base64 encoded image and downloaded file decoded to bytes.'''
 
@@ -82,3 +95,25 @@ class CaptureResponseJson(TypedDict, total=False):
     trusted_timestamps: dict[str, str] | None
     runtime: float | None
     potential_favicons: list[str] | None
+
+
+class SessionMetadata(TypedDict, total=False):
+    """Backend-agnostic interactive session metadata stored in Redis."""
+
+    status: int
+    backend_type: str
+    view_url: str
+    created_at: int
+    expires_at: int
+    capture_requested_at: int
+
+
+class XpraSessionMetadata(TypedDict, total=False):
+    """XPRA-specific transport metadata stored separately from session state."""
+
+    display: str
+    socket_path: str
+
+
+class StoredSessionMetadata(SessionMetadata, XpraSessionMetadata, total=False):
+    """Compatibility view combining public session metadata and backend state."""

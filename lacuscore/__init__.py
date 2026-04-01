@@ -1,6 +1,7 @@
 from .lacuscore import LacusCore
 from .helpers import (CaptureStatus, CaptureResponse, CaptureResponseJson,  # noqa
-                      LacusCoreException, CaptureError, RetryCapture)  # noqa
+                      LacusCoreException, CaptureError, RetryCapture,  # noqa
+                      SessionStatus)  # noqa
 from .lacus_monitoring import LacusCoreMonitoring  # noqa
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     'LacusCoreException',
     'CaptureError',
     'RetryCapture',
+    'SessionStatus',
 ]
