@@ -259,9 +259,9 @@ class LacusCore():
         :param with_favicon: If True, PlaywrightCapture will attempt to get the potential favicons for the rendered URL. It is a dirty trick, see this issue for details: https://github.com/Lookyloo/PlaywrightCapture/issues/45
         :param with_trusted_timestamps: If True, PlaywrightCapture will trigger calls to a remote timestamp service. For that to work, this class must have been initialized with tt_settings. See RFC3161 for details: https://www.rfc-editor.org/rfc/rfc3161
         :param allow_tracking: If True, PlaywrightCapture will attempt to click through the cookie banners. It is totally dependent on the framework used on the website.
-        :param headless: Whether to run the browser in headless mode. WARNING: requires to run in a graphical environment.
         :param interactive: If True, the capture will be handled as an interactive session managed by xpra.
         :param interactive_ttl: Time-to-live in seconds for an interactive session.
+        :param headless: Whether to run the browser in headless mode. WARNING: requires to run in a graphical environment.
         :param max_retries: The maximum anount of retries for this capture
         :param init_script: A JavaScript that will be executed on each page of the capture.
         :param final_wait: The very last wait time, after the instrumentation is done.

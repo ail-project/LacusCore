@@ -3,6 +3,7 @@ from .helpers import (CaptureStatus, CaptureResponse, CaptureResponseJson,  # no
                       LacusCoreException, CaptureError, RetryCapture,  # noqa
                       SessionStatus)  # noqa
 from .lacus_monitoring import LacusCoreMonitoring  # noqa
+from .xpra_session import XpraSessionManager  # noqa
 
 __all__ = [
     'LacusCore',
@@ -14,4 +15,5 @@ __all__ = [
     'CaptureError',
     'RetryCapture',
     'SessionStatus',
+    'XpraSessionManager',
 ]

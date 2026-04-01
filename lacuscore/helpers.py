@@ -62,8 +62,6 @@ class SessionStatus(IntEnum):
     ERROR = 2
     STOPPED = 3
     EXPIRED = 4
-    # Deprecated: capture requests are now represented separately in
-    # SessionMetadata via ``capture_requested_at``.
     CAPTURE_REQUESTED = 5
 
 
