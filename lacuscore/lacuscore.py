@@ -441,6 +441,7 @@ class LacusCore():
         raise LacusCoreException(f'Unknown interactive session backend: {resolved_backend}')
 
     def get_session_metadata(self, uuid: str) -> SessionMetadata | None:
+        """Return public session metadata for a capture UUID, or None if no session exists."""
         record = self.session_store.read(uuid)
         if not record:
             return None

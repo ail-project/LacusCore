@@ -63,6 +63,7 @@ class SessionMetadataStore:
 
     def write(self, uuid: str, metadata: SessionMetadata,
               backend_metadata: dict[str, Any] | None=None, *, expire_seconds: int | None=None) -> None:
+        """Persist session metadata and optional backend state to Redis."""
         core_metadata = dict(metadata)
         backend_type = str(core_metadata.get('backend_type') or 'xpra')
         core_metadata['backend_type'] = backend_type
@@ -84,6 +85,7 @@ class SessionMetadataStore:
 
     def mark_terminal(self, uuid: str, metadata: SessionMetadata, *, status: SessionStatus,
                       expire_seconds: int=60) -> None:
+        """Update session status to a terminal state and set a short expiry."""
         core_metadata = dict(metadata)
         backend_type = str(core_metadata.get('backend_type') or 'xpra')
         core_metadata['backend_type'] = backend_type
@@ -97,6 +99,7 @@ class SessionMetadataStore:
         pipeline.execute()
 
     def read(self, uuid: str) -> StoredSessionRecord | None:
+        """Load session and backend metadata for a capture UUID, or None if absent."""
         raw_core_metadata = self.redis.hgetall(self.core_key(uuid))
         if not raw_core_metadata:
             return None
@@ -117,6 +120,7 @@ class SessionMetadataStore:
         )
 
     def request_finish(self, uuid: str) -> StoredSessionRecord | None:
+        """Atomically mark a session as ready for final capture via WATCH/MULTI."""
         core_key = self.core_key(uuid)
         now_ts = int(time.time())
 
@@ -150,6 +154,7 @@ class SessionMetadataStore:
                     continue
 
     def scan_expired(self, now_ts: int) -> list[tuple[str, StoredSessionRecord]]:
+        """Return all non-terminal sessions whose expires_at is in the past."""
         expired_sessions: list[tuple[str, StoredSessionRecord]] = []
         for key in self.redis.scan_iter('lacus:session:*'):
             key_str = key.decode() if isinstance(key, bytes) else str(key)
