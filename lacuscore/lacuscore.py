@@ -463,7 +463,7 @@ class LacusCore():
             return None
         return cast(SessionMetadata, dict(record.metadata))
 
-    def stop_session(self, uuid: str, *, status: SessionStatus = SessionStatus.STOPPED) -> None:
+    def stop_session(self, uuid: str, *, status: SessionStatus=SessionStatus.STOPPED) -> None:
         """Stop an interactive session associated with a capture UUID."""
         record = self.session_store.read(uuid)
         if not record:
@@ -919,7 +919,7 @@ class LacusCore():
                 else:
                     browser_engine = 'webkit'
 
-            if getattr(to_capture, 'interactive', False):
+            if to_capture.interactive:
                 result = await self._run_interactive_capture(
                     uuid=uuid,
                     to_capture=to_capture,

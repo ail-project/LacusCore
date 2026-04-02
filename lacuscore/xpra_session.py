@@ -64,9 +64,9 @@ class XpraSessionManager:
         'XDG_RUNTIME_DIR',
     )
 
-    def __init__(self, xpra_command: str = "xpra",
-                 socket_dir: str | Path | None = None,
-                 public_base_url: str | None = None) -> None:
+    def __init__(self, xpra_command: str='xpra',
+                 socket_dir: str | Path | None=None,
+                 public_base_url: str | None=None) -> None:
         """Initialize an xpra session manager.
 
         ``xpra_command`` defaults to the ``xpra`` binary on PATH and can be
