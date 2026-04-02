@@ -21,6 +21,26 @@ and you can use [Pylacus](https://github.com/ail-project/pylacus) to query it.
 The `enqueue`, `get_capture_status`, and `get_capture` methods if `LacusCore` and `PyLacus` have
 the same parameters which means you can easily use them interchangeably in your project.
 
+## Interactive Sessions
+
+`LacusCore` can also manage interactive captures when it is initialized with
+`interactive_allowed=True` and `headed_allowed=True`. In that mode, `enqueue(...)`
+accepts `interactive=True` (and an optional `interactive_ttl` in seconds,
+default 900) and keeps the browser session alive until a trusted caller
+triggers the final capture via `request_session_capture(uuid)`.
+
+Interactive session state is split into two layers:
+
+- `get_session_metadata(uuid)` returns the backend-agnostic public state for a
+	session: status, view URL, lifecycle timestamps, and whether a final capture
+	has been requested.
+- `get_session_backend_metadata(uuid)` returns backend-specific transport data
+	for trusted local infrastructure only. This is where implementation details
+	such as xpra unix socket paths belong.
+
+That split keeps API consumers decoupled from the current xpra implementation
+while still allowing a local sidecar proxy to connect to the active session.
+
 
 For more information regarding the usage of the module and a few examples, please refer to
 [the documentation](https://lacuscore.readthedocs.io/en/latest/)
