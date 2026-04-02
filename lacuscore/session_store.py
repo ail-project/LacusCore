@@ -29,8 +29,8 @@ class SessionMetadataStore:
     _int_fields = {'status', 'created_at', 'expires_at', 'capture_requested_at'}
     _legacy_xpra_fields = {'display', 'socket_path'}
 
-    def __init__(self, redis: Redis, *, finish_key: str='capture_requested_at') -> None:
-        self.redis = redis
+    def __init__(self, redis: Redis[bytes], *, finish_key: str='capture_requested_at') -> None:
+        self.redis: Redis[bytes] = redis
         self.finish_key = finish_key
 
     @staticmethod
@@ -68,11 +68,11 @@ class SessionMetadataStore:
         core_metadata['backend_type'] = backend_type
 
         pipeline = self.redis.pipeline()
-        pipeline.hset(self.core_key(uuid), mapping=cast(dict[str, str | int], core_metadata))
+        pipeline.hset(self.core_key(uuid), mapping=core_metadata)  # type: ignore[arg-type]
         if backend_metadata is not None:
             backend_key = self.backend_key(uuid, backend_type)
             if backend_metadata:
-                pipeline.hset(backend_key, mapping=cast(dict[str, str | int], backend_metadata))
+                pipeline.hset(backend_key, mapping=backend_metadata)  # type: ignore[arg-type]
             else:
                 pipeline.delete(backend_key)
 
@@ -90,7 +90,7 @@ class SessionMetadataStore:
         core_metadata['status'] = int(status)
 
         pipeline = self.redis.pipeline()
-        pipeline.hset(self.core_key(uuid), mapping=cast(dict[str, str | int], core_metadata))
+        pipeline.hset(self.core_key(uuid), mapping=core_metadata)  # type: ignore[arg-type]
         pipeline.hdel(self.core_key(uuid), self.finish_key)
         pipeline.expire(self.core_key(uuid), expire_seconds)
         pipeline.expire(self.backend_key(uuid, backend_type), expire_seconds)
@@ -124,7 +124,9 @@ class SessionMetadataStore:
             while True:
                 try:
                     pipeline.watch(core_key)
-                    raw_core_metadata = pipeline.hgetall(core_key)
+                    # After watch(), hgetall executes immediately and returns
+                    # a dict rather than a Pipeline future.
+                    raw_core_metadata: dict[bytes, Any] = pipeline.hgetall(core_key)  # type: ignore[assignment]
                     if not raw_core_metadata:
                         pipeline.reset()
                         return None

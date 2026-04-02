@@ -20,7 +20,7 @@ from base64 import b64decode, b64encode
 from datetime import UTC, date, datetime, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from tempfile import NamedTemporaryFile
-from typing import Literal, Any, overload, cast
+from typing import Literal, Any, overload, cast, TYPE_CHECKING
 from collections.abc import AsyncIterator
 from uuid import uuid4
 from urllib.parse import urlsplit
@@ -64,6 +64,11 @@ else:
     def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
         if timeout_cm.expired():
             logger.warning(f'Timeout expired: {error_message}')
+
+if TYPE_CHECKING:
+    from playwrightcapture.capture import PageCaptureState  # type: ignore[attr-defined]  # added on feature branch
+    from playwright.async_api import Page
+
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
 
@@ -432,14 +437,14 @@ class LacusCore():
     def _get_session_manager(self, backend_type: str | None=None) -> SessionManager:
         resolved_backend = backend_type or XpraSessionManager.backend_type
         if resolved_backend == XpraSessionManager.backend_type:
-            return XpraSessionManager()
+            return XpraSessionManager()  # type: ignore[return-value]  # structural subtype; mypy cannot verify Protocol **kwargs
         raise LacusCoreException(f'Unknown interactive session backend: {resolved_backend}')
 
     def get_session_metadata(self, uuid: str) -> SessionMetadata | None:
         record = self.session_store.read(uuid)
         if not record:
             return None
-        return dict(record.metadata)
+        return cast(SessionMetadata, dict(record.metadata))
 
     def get_session_backend_metadata(self, uuid: str) -> dict[str, Any] | None:
         """Return backend-specific metadata for trusted session transport callers."""
@@ -456,7 +461,7 @@ class LacusCore():
         record = self.session_store.request_finish(uuid)
         if not record:
             return None
-        return dict(record.metadata)
+        return cast(SessionMetadata, dict(record.metadata))
 
     def stop_session(self, uuid: str, *, status: SessionStatus = SessionStatus.STOPPED) -> None:
         """Stop an interactive session associated with a capture UUID."""
@@ -472,7 +477,7 @@ class LacusCore():
             created_at_ts = 0
             expires_at_ts = 0
 
-        manager = self._get_session_manager(cast(str | None, metadata.get('backend_type')))
+        manager = self._get_session_manager(metadata.get('backend_type'))
         session = manager.restore_session(
             created_at=datetime.fromtimestamp(created_at_ts, UTC) if created_at_ts else datetime.fromtimestamp(0, UTC),
             expires_at=datetime.fromtimestamp(expires_at_ts, UTC) if expires_at_ts else datetime.fromtimestamp(0, UTC),
@@ -481,7 +486,7 @@ class LacusCore():
         )
 
         if not manager.stop_session(session):
-            backend_type = cast(str, metadata.get('backend_type', 'unknown'))
+            backend_type = str(metadata.get('backend_type', 'unknown'))
             self.master_logger.warning('Unable to confirm %s shutdown for interactive session %s.', backend_type, uuid)
 
         self.session_store.mark_terminal(uuid, metadata, status=status, expire_seconds=60)
@@ -536,10 +541,10 @@ class LacusCore():
             raise RetryCapture(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
 
     async def _open_interactive_page(self, capture: Capture, to_capture: CaptureSettings,
-                                     url: str, logger: LacusCoreLogAdapter) -> tuple[Any, Any]:
+                                     url: str, logger: LacusCoreLogAdapter) -> tuple[Page, PageCaptureState]:
         try:
             page = await capture.context.new_page()
-            page_capture_state = await capture.setup_page_capture(page)
+            page_capture_state = await capture.setup_page_capture(page)  # type: ignore[attr-defined]  # method added on feature branch
             await page.goto(
                 url,
                 wait_until='domcontentloaded',
@@ -565,6 +570,8 @@ class LacusCore():
             raise CaptureError('Interactive captures are disabled by configuration.')
         if not self.headed_allowed:
             raise CaptureError('Interactive captures require headed_allowed=True.')
+
+        result: CaptureResponse = {}
 
         session_manager = self._get_session_manager()
         session = await asyncio.get_running_loop().run_in_executor(
@@ -640,12 +647,12 @@ class LacusCore():
 
                     record_metadata = record.metadata
                     status_val = int(record_metadata.get('status', int(SessionStatus.UNKNOWN)))
-                    finish_requested = int(record_metadata.get(self.session_store.finish_key, 0) or 0) > 0
+                    finish_requested = int(record_metadata.get(self.session_store.finish_key, 0) or 0) > 0  # type: ignore[call-overload]
 
                     if finish_requested:
                         try:
                             async with timeout(self.max_capture_time) as capture_timeout:
-                                playwright_result = await capture.capture_current_page(
+                                playwright_result = await capture.capture_current_page(  # type: ignore[attr-defined]  # method added on feature branch
                                     page,
                                     rendered_hostname_only=to_capture.rendered_hostname_only,
                                     with_screenshot=to_capture.with_screenshot,
@@ -686,6 +693,8 @@ class LacusCore():
             self.session_store.mark_terminal(uuid, metadata, status=SessionStatus.ERROR, expire_seconds=60)
             await self._stop_live_session_backend(session_manager, session)
             raise
+
+        return result  # pragma: no cover — the loop always exits via return or raise above
 
     async def _run_standard_capture(self, *, uuid: str, to_capture: CaptureSettings,
                                     url: str, browser_engine: BROWSER,
@@ -748,6 +757,8 @@ class LacusCore():
         except Exception as e:
             logger.exception(f'Something went poorly {url} - {e}')
             raise CaptureError(f'Something went poorly {url} - {e}')
+
+        assert False, 'unreachable: all paths return or raise'  # pragma: no cover
 
     async def consume_queue(self, max_consume: int) -> AsyncIterator[Task[None]]:
         """Trigger the capture for captures with the highest priority. Up to max_consume.
@@ -1053,7 +1064,7 @@ class LacusCore():
         if root_key is None:
             root_key = f'lacus:capture_results_hash:{capture_uuid}'
 
-        hash_to_set = {}
+        hash_to_set: dict[str, bytes | int | float | str] = {}
         try:
             if results.get('har'):
                 hash_to_set['har'] = pickle.dumps(results['har'])
@@ -1097,9 +1108,9 @@ class LacusCore():
             # These entries can usually be stored directly, but Redis hash values
             # must be serialized to primitive wire types first.
             if key == 'status':
-                hash_to_set[key] = int(value)  # type: ignore[arg-type]
+                hash_to_set[key] = int(value)
             elif key == 'runtime':
-                hash_to_set[key] = float(value)  # type: ignore[arg-type]
+                hash_to_set[key] = float(value)
             elif key in direct_text_fields:
                 hash_to_set[key] = str(value)
             elif key in direct_bytes_fields:
