@@ -82,7 +82,7 @@ class XpraSessionManager:
             else:
                 socket_dir = Path(gettempdir()) / 'lacus-xpra'
         self.socket_dir = Path(socket_dir)
-        self.socket_dir.mkdir(parents=True, exist_ok=True)
+        self.socket_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
         if public_base_url is None:
             public_base_url = os.getenv('LACUS_XPRA_PUBLIC_BASE_URL')

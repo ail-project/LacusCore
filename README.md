@@ -26,7 +26,7 @@ the same parameters which means you can easily use them interchangeably in your 
 `LacusCore` can also manage interactive captures when it is initialized with
 `interactive_allowed=True` and `headed_allowed=True`. In that mode, `enqueue(...)`
 accepts `interactive=True` (and an optional `interactive_ttl` in seconds,
-default 900) and keeps the browser session alive until a trusted caller
+default 600) and keeps the browser session alive until a trusted caller
 triggers the final capture via `request_session_capture(uuid)`.
 
 Interactive session state is split into two layers:
