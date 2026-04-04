@@ -1050,13 +1050,12 @@ class LacusCore():
                     stats_pipeline.zincrby(f'stats:{today}:errors', 1, 'Redis Connection')
                     logger.critical('Unable to connect to redis and to push the result of the capture.')
 
-            # Expire stats in 10 days. redis-py expects the TTL as an integer
-            # number of seconds, not a timedelta instance.
-            expire_seconds = int(timedelta(days=10).total_seconds())
-            stats_pipeline.expire(f'stats:{today}:errors', expire_seconds)
-            stats_pipeline.expire(f'stats:{today}:retry_failed', expire_seconds)
-            stats_pipeline.expire(f'stats:{today}:retry_success', expire_seconds)
-            stats_pipeline.expire(f'stats:{today}:captures', expire_seconds)
+            # Expire stats in 10 days
+            stats_expiry = timedelta(days=10)
+            stats_pipeline.expire(f'stats:{today}:errors', stats_expiry)
+            stats_pipeline.expire(f'stats:{today}:retry_failed', stats_expiry)
+            stats_pipeline.expire(f'stats:{today}:retry_success', stats_expiry)
+            stats_pipeline.expire(f'stats:{today}:captures', stats_expiry)
             stats_pipeline.execute()
 
     def _store_capture_response(self, pipeline: Redis, capture_uuid: str, results: CaptureResponse,   # type: ignore[type-arg]
