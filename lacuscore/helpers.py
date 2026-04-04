@@ -115,5 +115,4 @@ class XpraSessionMetadata(TypedDict, total=False):
     socket_path: str
 
 
-class StoredSessionMetadata(SessionMetadata, XpraSessionMetadata, total=False):
-    """Compatibility view combining public session metadata and backend state."""
+
