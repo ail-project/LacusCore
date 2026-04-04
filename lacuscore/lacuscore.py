@@ -66,7 +66,6 @@ else:
             logger.warning(f'Timeout expired: {error_message}')
 
 if TYPE_CHECKING:
-    from playwrightcapture.capture import PageCaptureState  # type: ignore[attr-defined]  # added on feature branch
     from playwright.async_api import Page
 
 
@@ -542,10 +541,10 @@ class LacusCore():
             raise RetryCapture(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
 
     async def _open_interactive_page(self, capture: Capture, to_capture: CaptureSettings,
-                                     url: str, logger: LacusCoreLogAdapter) -> tuple[Page, PageCaptureState]:
+                                     url: str, logger: LacusCoreLogAdapter) -> Page:
         try:
             page = await capture.context.new_page()
-            page_capture_state = await capture.setup_page_capture(page)  # type: ignore[attr-defined]  # method added on feature branch
+            await capture.setup_page_capture(page)  # type: ignore[attr-defined]  # method added on feature branch
             await page.goto(
                 url,
                 wait_until='domcontentloaded',
@@ -560,7 +559,7 @@ class LacusCore():
             logger.warning(f'Unable to create initial interactive page for {url}: {e}')
             raise RetryCapture(f'Unable to create initial interactive page for {url}: {e}')
 
-        return page, page_capture_state
+        return page
 
     async def _run_interactive_capture(self, *, uuid: str, to_capture: CaptureSettings,
                                        url: str, browser_engine: BROWSER,
@@ -613,7 +612,7 @@ class LacusCore():
                     **capture_kwargs) as capture:
                 self._apply_capture_settings(capture, to_capture)
                 await self._initialize_capture_context(capture, logger, url)
-                page, page_capture_state = await self._open_interactive_page(capture, to_capture, url, logger)
+                page = await self._open_interactive_page(capture, to_capture, url, logger)
 
                 metadata['status'] = int(SessionStatus.READY)
                 self.session_store.write(uuid, metadata, backend_metadata, expire_seconds=metadata_ttl)
@@ -653,13 +652,14 @@ class LacusCore():
                     if finish_requested:
                         try:
                             async with timeout(self.max_capture_time) as capture_timeout:
-                                playwright_result = await capture.capture_current_page(  # type: ignore[attr-defined]  # method added on feature branch
-                                    page,
+                                playwright_result = await capture.capture_page(  # type: ignore[call-arg]  # params added on feature branch
+                                    page=page,
+                                    current_page_only=True,
+                                    max_depth_capture_time=self.max_capture_time,
                                     rendered_hostname_only=to_capture.rendered_hostname_only,
                                     with_screenshot=to_capture.with_screenshot,
                                     with_favicon=to_capture.with_favicon,
                                     with_trusted_timestamps=to_capture.with_trusted_timestamps,
-                                    page_capture_state=page_capture_state,
                                 )
                         except (TimeoutError, asyncio.exceptions.TimeoutError):
                             timeout_expired(capture_timeout, logger, 'Interactive capture took too long.')
