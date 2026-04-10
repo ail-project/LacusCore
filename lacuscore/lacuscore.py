@@ -50,7 +50,8 @@ from .xpra_session import XpraSessionManager
 
 if sys.version_info < (3, 11):
     from async_timeout import timeout
-    from timezone import utc as UTC
+    from datetime import timezone
+    UTC = timezone.utc
 
     def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
         if timeout_cm.expired:
