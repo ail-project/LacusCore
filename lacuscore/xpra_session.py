@@ -42,11 +42,6 @@ class XpraSessionManager:
     socket with HTML5 enabled. This keeps the session transport private to the
     Lacus deployment while allowing a separate reverse proxy or sidecar to
     expose a stable end-user route.
-
-    ``LACUS_XPRA_PUBLIC_BASE_URL`` is optional and only used to publish a
-    deployment-specific view URL. If set and it contains ``{uuid}``, the
-    placeholder is replaced with the capture UUID; otherwise the UUID is
-    appended as a path segment.
     """
 
     backend_type = 'xpra'
@@ -65,8 +60,7 @@ class XpraSessionManager:
     )
 
     def __init__(self, xpra_command: str='xpra',
-                 socket_dir: str | Path | None=None,
-                 public_base_url: str | None=None) -> None:
+                 socket_dir: str | Path | None=None) -> None:
         """Initialize an xpra session manager.
 
         ``xpra_command`` defaults to the ``xpra`` binary on PATH and can be
@@ -83,10 +77,6 @@ class XpraSessionManager:
                 socket_dir = Path(gettempdir()) / 'lacus-xpra'
         self.socket_dir = Path(socket_dir)
         self.socket_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-
-        if public_base_url is None:
-            public_base_url = os.getenv('LACUS_XPRA_PUBLIC_BASE_URL')
-        self.public_base_url = public_base_url
 
     def _get_socket_path(self, session_name: str) -> Path:
         return self.socket_dir / f'{session_name}.sock'
@@ -148,8 +138,7 @@ class XpraSessionManager:
         try:
             return subprocess.run(
                 cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 timeout=10,
                 env=self._build_clean_env(),
@@ -183,7 +172,7 @@ class XpraSessionManager:
 
         cmd = [
             self.xpra_command,
-            'start',
+            'seamless',
             '--daemon=no',
             '--attach=no',
             '--html=on',
@@ -285,18 +274,9 @@ class XpraSessionManager:
                 logger.error("xpra did not create socket %s in time. Command: %s", socket_path, cmd)
             raise RuntimeError(msg)
 
-        if self.public_base_url:
-            if '{uuid}' in self.public_base_url:
-                view_url = self.public_base_url.format(uuid=session_name)
-            else:
-                view_url = f"{self.public_base_url.rstrip('/')}/{session_name}/"
-        else:
-            view_url = None
-
         return XpraSession(
             created_at=created_at,
             expires_at=expires_at,
-            view_url=view_url,
             display=display,
             socket_path=str(socket_path),
         )
@@ -310,19 +290,19 @@ class XpraSessionManager:
         }
 
     def restore_session(self, *, created_at: datetime, expires_at: datetime,
-                        view_url: str | None, backend_metadata: Mapping[str, Any]) -> XpraSession:
+                        backend_metadata: Mapping[str, Any]) -> XpraSession:
         return XpraSession(
             created_at=created_at,
             expires_at=expires_at,
-            view_url=view_url,
             display=str(backend_metadata.get('display', '')),
             socket_path=str(backend_metadata.get('socket_path', '')),
         )
 
-    def get_capture_kwargs(self, session: Session) -> Mapping[str, Any]:
+    def get_capture_env(self, session: Session) -> Mapping[str, str | float | bool]:
+        """returns ENV variables to pass to the capture"""
         if not isinstance(session, XpraSession):
             raise TypeError(f'Expected XpraSession, got {type(session)!r}')
-        return {'display': session.display}
+        return {'DISPLAY': session.display}
 
     def stop_session(self, session: Session) -> bool:
         """Terminate a running xpra backend session.

@@ -19,7 +19,6 @@ class Session:
 
     created_at: datetime
     expires_at: datetime
-    view_url: str | None
 
 
 class SessionManager(Protocol):
@@ -45,5 +44,5 @@ class SessionManager(Protocol):
                         view_url: str | None, backend_metadata: Mapping[str, Any]) -> Session:  # pragma: no cover - structural contract
         ...
 
-    def get_capture_kwargs(self, session: Session) -> Mapping[str, Any]:  # pragma: no cover - structural contract
+    def get_capture_env(self, session: Session) -> Mapping[str, str | float | bool]:  # pragma: no cover - structural contract
         ...

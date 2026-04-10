@@ -13,8 +13,6 @@ from playwrightcapture import (CaptureResponse as PlaywrightCaptureResponse,
                                FramesResponse as PlaywrightFramesResponse,
                                )
 
-from lookyloo_models import Cookie
-
 if sys.version_info < (3, 12):
     from typing_extensions import TypedDict
 else:
@@ -81,7 +79,7 @@ class CaptureResponseJson(TypedDict, total=False):
     status: int
     last_redirected_url: str | None
     har: dict[str, Any] | None
-    cookies: list[Cookie] | None
+    cookies: list[dict[str, Any]] | None
     # NOTE: should be that, but StorageState doesn't define the indexeddb
     # storage: StorageState | None
     storage: dict[str, Any] | None
@@ -113,6 +111,3 @@ class XpraSessionMetadata(TypedDict, total=False):
 
     display: str
     socket_path: str
-
-
-

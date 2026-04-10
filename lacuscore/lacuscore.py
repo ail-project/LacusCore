@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import functools
 import hashlib
 import logging
 import os
@@ -20,12 +19,10 @@ from base64 import b64decode, b64encode
 from datetime import UTC, date, datetime, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from tempfile import NamedTemporaryFile
-from typing import Literal, Any, overload, cast, TYPE_CHECKING
+from typing import Literal, Any, overload, cast
 from collections.abc import AsyncIterator
 from uuid import uuid4
 from urllib.parse import urlsplit
-
-import ua_parser
 
 from dns.resolver import Cache
 from dns.asyncresolver import Resolver
@@ -47,7 +44,7 @@ from .helpers import (
     LacusCoreLogAdapter, CaptureError, RetryCapture,
     CaptureStatus, SessionStatus, CaptureResponse, CaptureResponseJson,
     SessionMetadata)
-from .session import Session, SessionManager
+from .session import SessionManager
 from .session_store import SessionMetadataStore
 from .xpra_session import XpraSessionManager
 
@@ -64,9 +61,6 @@ else:
     def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
         if timeout_cm.expired():
             logger.warning(f'Timeout expired: {error_message}')
-
-if TYPE_CHECKING:
-    from playwright.async_api import Page
 
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
@@ -124,6 +118,7 @@ class LacusCore():
                  max_retries: int=3,
                  headed_allowed: bool=False,
                  interactive_allowed: bool=False,
+                 interactive_backend_type: str | None=None,
                  tt_settings: TrustedTimestampSettings | None=None,
                  loglevel: str | int='INFO') -> None:
         self.master_logger = logging.getLogger(f'{self.__class__.__name__}')
@@ -142,6 +137,7 @@ class LacusCore():
         self.max_retries = max_retries
         self.headed_allowed = headed_allowed
         self.interactive_allowed = interactive_allowed
+        self.interactive_backend_type = interactive_backend_type
         self.session_store = SessionMetadataStore(self.redis)
 
         self.dnsresolver: Resolver = Resolver()
@@ -427,17 +423,10 @@ class LacusCore():
             return CaptureStatus.DONE
         return CaptureStatus.UNKNOWN
 
-    async def _stop_live_session_backend(self, manager: SessionManager, session: Session) -> bool:
-        return await asyncio.get_running_loop().run_in_executor(
-            None,
-            functools.partial(manager.stop_session, session),
-        )
-
-    def _get_session_manager(self, backend_type: str | None=None) -> SessionManager:
-        resolved_backend = backend_type or XpraSessionManager.backend_type
-        if resolved_backend == XpraSessionManager.backend_type:
+    def _get_session_manager(self, backend_type: str | None) -> SessionManager:
+        if backend_type == XpraSessionManager.backend_type:
             return XpraSessionManager()  # type: ignore[return-value]  # structural subtype; mypy cannot verify Protocol **kwargs
-        raise LacusCoreException(f'Unknown interactive session backend: {resolved_backend}')
+        raise LacusCoreException(f'Unknown interactive session backend: {backend_type}')
 
     def get_session_metadata(self, uuid: str) -> SessionMetadata | None:
         """Return public session metadata for a capture UUID, or None if no session exists."""
@@ -515,20 +504,6 @@ class LacusCore():
             except Exception as e:  # pragma: no cover - defensive
                 self.master_logger.warning(f'Unable to expire interactive session {uuid}: {e}')
 
-    def _apply_capture_settings(self, capture: Capture, to_capture: CaptureSettings) -> None:
-        # required by Mypy: https://github.com/python/mypy/issues/3004
-        capture.headers = to_capture.headers
-        capture.cookies = [c.model_dump(exclude_none=True) for c in to_capture.cookies] if to_capture.cookies else None
-        capture.storage = to_capture.storage
-        capture.viewport = to_capture.viewport.model_dump(exclude_none=True) if to_capture.viewport else None
-        capture.user_agent = to_capture.user_agent
-        capture.http_credentials = to_capture.http_credentials.model_dump(exclude_none=True) if to_capture.http_credentials else None
-        capture.geolocation = to_capture.geolocation.model_dump(exclude_none=True) if to_capture.geolocation else None
-        capture.timezone_id = to_capture.timezone_id
-        capture.locale = to_capture.locale
-        capture.color_scheme = to_capture.color_scheme
-        capture.java_script_enabled = to_capture.java_script_enabled
-
     async def _initialize_capture_context(self, capture: Capture, logger: LacusCoreLogAdapter, url: str) -> None:
         # make sure the initialization doesn't take too long
         init_timeout = max(self.max_capture_time / 10, 5)
@@ -540,30 +515,8 @@ class LacusCore():
             logger.warning(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
             raise RetryCapture(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
 
-    async def _open_interactive_page(self, capture: Capture, to_capture: CaptureSettings,
-                                     url: str, logger: LacusCoreLogAdapter) -> Page:
-        try:
-            page = await capture.context.new_page()
-            await capture.setup_page_capture(page)  # type: ignore[attr-defined]  # method added on feature branch
-            await page.goto(
-                url,
-                wait_until='domcontentloaded',
-                referer=to_capture.referer if to_capture.referer else ''
-            )
-            try:
-                await page.bring_to_front()
-                logger.debug('Interactive page moved to front.')
-            except Exception as e:  # pragma: no cover - best-effort only
-                logger.warning(f'Unable to bring interactive page to front: {e}.')
-        except Exception as e:
-            logger.warning(f'Unable to create initial interactive page for {url}: {e}')
-            raise RetryCapture(f'Unable to create initial interactive page for {url}: {e}')
-
-        return page
-
     async def _run_interactive_capture(self, *, uuid: str, to_capture: CaptureSettings,
-                                       url: str, browser_engine: BROWSER,
-                                       proxy: dict[str, str] | str | None,
+                                       url: str,
                                        logger: LacusCoreLogAdapter,
                                        stats_pipeline: Any, today: str) -> CaptureResponse:
         if not self.interactive_allowed:
@@ -572,12 +525,10 @@ class LacusCore():
             raise CaptureError('Interactive captures require headed_allowed=True.')
 
         result: CaptureResponse = {}
+        errors: list[str] = []
 
-        session_manager = self._get_session_manager()
-        session = await asyncio.get_running_loop().run_in_executor(
-            None,
-            functools.partial(session_manager.start_session, session_name=uuid, ttl=to_capture.interactive_ttl),
-        )
+        session_manager = self._get_session_manager(self.interactive_backend_type)
+        session = session_manager.start_session(session_name=uuid, ttl=to_capture.interactive_ttl)
 
         metadata: SessionMetadata = {
             'status': int(SessionStatus.STARTING),
@@ -585,34 +536,27 @@ class LacusCore():
             'created_at': int(session.created_at.timestamp()),
             'expires_at': int(session.expires_at.timestamp()),
         }
-        if session.view_url:
-            metadata['view_url'] = session.view_url
         backend_metadata = dict(session_manager.serialize_backend_metadata(session))
         metadata_ttl = max(1, int(to_capture.interactive_ttl) + 60)
         self.session_store.write(uuid, metadata, backend_metadata, expire_seconds=metadata_ttl)
 
         try:
+            # NOTE: that shouldn't be needed, at this point, the capture should for sure be headless.
             to_capture.headless = False
 
             logger.debug(f'Initializing interactive session for {url}')
             stats_pipeline.sadd(f'stats:{today}:captures', url)
-            capture_kwargs = dict(session_manager.get_capture_kwargs(session))
-
             async with Capture(
-                    browser=browser_engine,
-                    device_name=to_capture.device_name,
-                    proxy=proxy,
-                    socks5_dns_resolver=to_capture.socks5_dns_resolver,
-                    general_timeout_in_sec=to_capture.general_timeout_in_sec,
                     loglevel=self.master_logger.getEffectiveLevel(),
-                    headless=to_capture.headless,
-                    init_script=to_capture.init_script,
-                    tt_settings=self.tt_settings,
                     uuid=uuid,
-                    **capture_kwargs) as capture:
-                self._apply_capture_settings(capture, to_capture)
+                    capture_settings=to_capture,
+                    tt_settings=self.tt_settings,
+                    env=dict(session_manager.get_capture_env(session))) as capture:
                 await self._initialize_capture_context(capture, logger, url)
-                page = await self._open_interactive_page(capture, to_capture, url, logger)
+
+                # prepare and open the page the user will interact with.
+                page = await capture.setup_page_capture(allow_tracking=to_capture.allow_tracking)
+                await capture.open_page(page, url, errors, to_capture.referer)
 
                 metadata['status'] = int(SessionStatus.READY)
                 self.session_store.write(uuid, metadata, backend_metadata, expire_seconds=metadata_ttl)
@@ -626,7 +570,7 @@ class LacusCore():
 
                     if expires_at_ts and now_ts >= expires_at_ts:
                         self.session_store.mark_terminal(uuid, metadata, status=SessionStatus.EXPIRED, expire_seconds=60)
-                        await self._stop_live_session_backend(session_manager, session)
+                        session_manager.stop_session(session)
                         return {
                             'error': 'Interactive session expired before capture.',
                             'status': CaptureStatus.DONE,
@@ -639,7 +583,7 @@ class LacusCore():
                         continue
 
                     if not record:
-                        await self._stop_live_session_backend(session_manager, session)
+                        session_manager.stop_session(session)
                         return {
                             'error': 'Interactive session metadata missing; assuming stopped.',
                             'status': CaptureStatus.DONE,
@@ -652,7 +596,7 @@ class LacusCore():
                     if finish_requested:
                         try:
                             async with timeout(self.max_capture_time) as capture_timeout:
-                                playwright_result = await capture.capture_page(  # type: ignore[call-arg]  # params added on feature branch
+                                playwright_result = await capture.capture_page(
                                     page=page,
                                     current_page_only=True,
                                     max_depth_capture_time=self.max_capture_time,
@@ -681,25 +625,24 @@ class LacusCore():
                             logger.info(f'Interactive capture of {url} finished - No Runtime.')
 
                         self.session_store.mark_terminal(uuid, record_metadata, status=SessionStatus.STOPPED, expire_seconds=60)
-                        await self._stop_live_session_backend(session_manager, session)
+                        session_manager.stop_session(session)
                         return result
 
                     if status_val in (int(SessionStatus.STOPPED), int(SessionStatus.EXPIRED), int(SessionStatus.ERROR)):
                         self.session_store.mark_terminal(uuid, record_metadata,
                                                          status=SessionStatus(status_val),
                                                          expire_seconds=60)
-                        await self._stop_live_session_backend(session_manager, session)
+                        session_manager.stop_session(session)
                         return {'runtime': None, 'status': CaptureStatus.DONE}
         except Exception:
             self.session_store.mark_terminal(uuid, metadata, status=SessionStatus.ERROR, expire_seconds=60)
-            await self._stop_live_session_backend(session_manager, session)
+            session_manager.stop_session(session)
             raise
 
         return result  # pragma: no cover — the loop always exits via return or raise above
 
     async def _run_standard_capture(self, *, uuid: str, to_capture: CaptureSettings,
-                                    url: str, browser_engine: BROWSER,
-                                    proxy: dict[str, str] | str | None,
+                                    url: str,
                                     logger: LacusCoreLogAdapter,
                                     stats_pipeline: Any, today: str) -> tuple[CaptureResponse, bool]:
         should_retry = False
@@ -708,17 +651,10 @@ class LacusCore():
             logger.debug(f'Capturing {url}')
             stats_pipeline.sadd(f'stats:{today}:captures', url)
             async with Capture(
-                    browser=browser_engine,
-                    device_name=to_capture.device_name,
-                    proxy=proxy,
-                    socks5_dns_resolver=to_capture.socks5_dns_resolver,
-                    general_timeout_in_sec=to_capture.general_timeout_in_sec,
                     loglevel=self.master_logger.getEffectiveLevel(),
-                    headless=to_capture.headless,
-                    init_script=to_capture.init_script,
-                    tt_settings=self.tt_settings,
-                    uuid=uuid) as capture:
-                self._apply_capture_settings(capture, to_capture)
+                    uuid=uuid,
+                    capture_settings=to_capture,
+                    tt_settings=self.tt_settings) as capture:
                 await self._initialize_capture_context(capture, logger, url)
 
                 try:
@@ -737,6 +673,9 @@ class LacusCore():
                     timeout_expired(capture_timeout, logger, 'Capture took too long.')
                     logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
                     raise RetryCapture(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+                except PlaywrightCaptureException as e:
+                    logger.warning(f'Unrecoverable exception during capture: {e}')
+                    raise CaptureError(f'Unrecoverable exception during capture: {e}')
 
                 result = cast(CaptureResponse, playwright_result)
                 if 'error' in result and 'error_name' in result:
@@ -745,8 +684,8 @@ class LacusCore():
                         stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
                 should_retry = capture.should_retry
                 return result, should_retry
-        except RetryCapture:
-            raise
+        except RetryCapture as e:
+            raise e
         except (PlaywrightCaptureException, InvalidPlaywrightParameter) as e:
             logger.warning(f'Invalid parameters for the capture of {url} - {e}')
             raise CaptureError(f'Invalid parameters for the capture of {url} - {e}')
@@ -759,7 +698,7 @@ class LacusCore():
             logger.exception(f'Something went poorly {url} - {e}')
             raise CaptureError(f'Something went poorly {url} - {e}')
 
-        assert False, 'unreachable: all paths return or raise'  # pragma: no cover
+        raise CaptureError('Should never land there, but that capture failed badly.')
 
     async def consume_queue(self, max_consume: int) -> AsyncIterator[Task[None]]:
         """Trigger the capture for captures with the highest priority. Up to max_consume.
@@ -776,19 +715,17 @@ class LacusCore():
                 continue
             max_consume -= 1
             uuid: str = value[0][0].decode()
-            priority: int = int(value[0][1])
             logger = LacusCoreLogAdapter(self.master_logger, {'uuid': uuid})
-            yield task_logger.create_task(self._capture(uuid, priority), name=uuid,
+            yield task_logger.create_task(self._capture(uuid), name=uuid,
                                           logger=logger,
                                           message='Capture raised an uncaught exception')
             # Make sur the task starts.
             await asyncio.sleep(0.1)
 
-    async def _capture(self, uuid: str, priority: int) -> None:
+    async def _capture(self, uuid: str) -> None:
         """Trigger a specific capture
 
         :param uuid: The UUID if the capture (given by enqueue)
-        :param priority: Only for internal use, will decide on the priority of the capture if the try now fails.
         """
         if self.redis.zscore('lacus:ongoing', uuid) is not None:
             # the capture is already ongoing
@@ -811,16 +748,8 @@ class LacusCore():
                 raise CaptureError(f'No capture settings for {uuid}')
 
             _to_capture = {k.decode(): v.decode() for k, v in _to_capture_b.items()}
-            _domain: str | None = None
-            if 'url' in _to_capture and _to_capture['url']:
-                # allows to pass the right context for cookies provided as {name: value}
-                try:
-                    _domain = urlsplit(_to_capture['url']).hostname
-                except Exception:
-                    # not capturing a url, ignore
-                    pass
             try:
-                to_capture = CaptureSettings.model_validate(_to_capture, context={'domain': _domain})
+                to_capture = CaptureSettings.model_validate(_to_capture)
             except ValidationError as e:
                 logger.warning(f'Settings invalid: {e}')
                 raise CaptureSettingsError('Invalid settings', e)
@@ -850,31 +779,30 @@ class LacusCore():
             except Exception as e:
                 result = {'error': f'Invalid URL: {url} - {e}'}
                 raise CaptureError(f'Invalid URL: {url} - {e}')
-            proxy = to_capture.proxy
             if self.tor_proxy:
                 # check if onion or forced
-                if (proxy == 'force_tor'  # if the proxy is set to "force_tor", we use the pre-configured tor proxy, regardless the URL, legacy feature.
-                        or (not proxy  # if the TLD is "onion", we use the pre-configured tor proxy
+                if (to_capture.proxy == 'force_tor'  # if the proxy is set to "force_tor", we use the pre-configured tor proxy, regardless the URL, legacy feature.
+                        or (not to_capture.proxy  # if the TLD is "onion", we use the pre-configured tor proxy
                             and splitted_url.netloc
                             and splitted_url.hostname
                             and splitted_url.hostname.split('.')[-1] == 'onion')):
                     if not _check_proxy_port_open(self.tor_proxy):
                         logger.critical(f'Unable to connect to the default tor proxy: {self.tor_proxy}')
                         raise CaptureError('The selected tor proxy is unreachable, unable to run the capture.')
-                    proxy = self.tor_proxy
+                    to_capture.proxy = self.tor_proxy
                     logger.info('Using the default tor proxy.')
             if self.i2p_proxy:
-                if (not proxy  # if the TLD is "i2p", we use the pre-configured I2P proxy
+                if (not to_capture.proxy  # if the TLD is "i2p", we use the pre-configured I2P proxy
                         and splitted_url.netloc
                         and splitted_url.hostname
                         and splitted_url.hostname.split('.')[-1] == 'i2p'):
                     if not _check_proxy_port_open(self.i2p_proxy):
                         logger.critical(f'Unable to connect to the default tor proxy: {self.i2p_proxy}')
                         raise CaptureError('The selected I2P proxy is unreachable, unable to run the capture.')
-                    proxy = self.i2p_proxy
+                    to_capture.proxy = self.i2p_proxy
                     logger.info('Using the default I2P proxy.')
 
-            if self.only_global_lookups and not proxy and splitted_url.scheme not in ['data', 'file']:
+            if self.only_global_lookups and not to_capture.proxy and splitted_url.scheme not in ['data', 'file']:
                 # not relevant if we also have a proxy, or the thing to capture is a data URI or a file on disk
                 if splitted_url.netloc:
                     if splitted_url.hostname and splitted_url.hostname.split('.')[-1] not in ['onion', 'i2p']:
@@ -906,50 +834,32 @@ class LacusCore():
                     result = {'error': f'Unable to find hostname or IP in the query: "{url}".'}
                     raise CaptureError(f'Unable to find hostname or IP in the query: "{url}".')
 
-            # Set default as chromium
-            browser_engine: BROWSER = "chromium"
-            if to_capture.browser:
-                browser_engine = to_capture.browser
-            elif to_capture.user_agent:
-                parsed_string = ua_parser.parse(to_capture.user_agent).with_defaults()
-                browser_family = parsed_string.user_agent.family.lower()
-                if browser_family.startswith('chrom'):
-                    browser_engine = 'chromium'
-                elif browser_family.startswith('firefox'):
-                    browser_engine = 'firefox'
-                else:
-                    browser_engine = 'webkit'
-
             if to_capture.interactive:
                 result = await self._run_interactive_capture(
                     uuid=uuid,
                     to_capture=to_capture,
                     url=url,
-                    browser_engine=browser_engine,
-                    proxy=proxy,
                     logger=logger,
                     stats_pipeline=stats_pipeline,
                     today=today,
                 )
-                return
-            result, should_retry = await self._run_standard_capture(
-                uuid=uuid,
-                to_capture=to_capture,
-                url=url,
-                browser_engine=browser_engine,
-                proxy=proxy,
-                logger=logger,
-                stats_pipeline=stats_pipeline,
-                today=today,
-            )
-
-            if should_retry:
-                # PlaywrightCapture considers this capture elligible for a retry
-                logger.info('PlaywrightCapture considers it elligible for a retry.')
-                raise RetryCapture('PlaywrightCapture considers it elligible for a retry.')
-            elif self.redis.exists(f'lacus:capture_retry:{uuid}'):
-                # this is a retry that worked
-                stats_pipeline.sadd(f'stats:{today}:retry_success', url)
+            else:
+                result, should_retry = await self._run_standard_capture(
+                    uuid=uuid,
+                    to_capture=to_capture,
+                    url=url,
+                    logger=logger,
+                    stats_pipeline=stats_pipeline,
+                    today=today,
+                )
+                # NOTE: set a should retry in the interactive capture?
+                if should_retry:
+                    # PlaywrightCapture considers this capture elligible for a retry
+                    logger.info('PlaywrightCapture considers it elligible for a retry.')
+                    raise RetryCapture('PlaywrightCapture considers it elligible for a retry.')
+                elif self.redis.exists(f'lacus:capture_retry:{uuid}'):
+                    # this is a retry that worked
+                    stats_pipeline.sadd(f'stats:{today}:retry_success', url)
         except RetryCapture as e:
             if not result and str(e):
                 result = {'error': str(e)}
@@ -998,7 +908,7 @@ class LacusCore():
         finally:
             # NOTE: in this block, we absolutely have to make sure the UUID is removed
             #       from the lacus:ongoing sorted set (it is definitely not ongoing anymore)
-            #       and optionally re-added to lacus:to_capture if re want to retry it
+            #       and optionally re-added to lacus:to_capture if we want to retry it
             #
             # In order to have a consistent capture status, the capture UUID must either be in
             # lacus:ongoing (while ongoing), in lacus:to_capture (on retry), or the result stored (on success).
@@ -1018,7 +928,7 @@ class LacusCore():
                     await asyncio.sleep(random.randint(5, 10))
                 p = self.redis.pipeline()
                 p.zrem('lacus:ongoing', uuid)
-                p.zadd('lacus:to_capture', {uuid: priority - 1})
+                p.zincrby('lacus:to_capture', -1, uuid)
                 p.execute()
             else:
                 retry_redis_error = 3

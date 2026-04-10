@@ -136,6 +136,9 @@ class SessionMetadataStore:
                 except WatchError:
                     continue
 
+    # TODO: keep a list of all the sessions (zset, score=start time)
+    # so we can a set and not the whole key space
+
     def scan_expired(self, now_ts: int) -> list[tuple[str, StoredSessionRecord]]:
         """Return all non-terminal sessions whose expires_at is in the past."""
         expired_sessions: list[tuple[str, StoredSessionRecord]] = []
