@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import sys
+
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 import logging
 import os
 from pathlib import Path
@@ -16,6 +18,9 @@ from typing import Any
 
 
 from .session import Session
+
+if sys.version_info >= (3, 11):
+    from datetime import UTC
 
 
 logger = logging.getLogger(__name__)
@@ -162,7 +167,11 @@ class XpraSessionManager:
         :return: XpraSession describing the running xpra process and its
             internal transport details.
         """
-        created_at = datetime.now(UTC)
+        if sys.version_info >= (3, 11):
+            created_at = datetime.now(UTC)
+        else:
+            created_at = datetime.utcnow()
+
         expires_at = created_at + timedelta(seconds=ttl)
 
         read_fd, write_fd = os.pipe()

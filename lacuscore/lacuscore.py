@@ -16,7 +16,7 @@ import unicodedata
 
 from asyncio import Task
 from base64 import b64decode, b64encode
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from tempfile import NamedTemporaryFile
 from typing import Literal, Any, overload, cast
@@ -50,12 +50,14 @@ from .xpra_session import XpraSessionManager
 
 if sys.version_info < (3, 11):
     from async_timeout import timeout
+    from timezone import utc as UTC
 
     def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
         if timeout_cm.expired:
             logger.warning(f'Timeout expired: {error_message}')
 
 else:
+    from datetime import UTC
     from asyncio import timeout
 
     def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
