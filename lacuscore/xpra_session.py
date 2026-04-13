@@ -37,7 +37,11 @@ class XpraSession(Session):
     """
 
     display: str
-    socket_path: str
+    socket_path: Path
+
+    def __post_init__(self) -> None:
+        if isinstance(self.socket_path, str):
+            self.socket_path = Path(self.socket_path)
 
 
 class XpraSessionManager:
@@ -83,9 +87,6 @@ class XpraSessionManager:
         self.socket_dir = Path(socket_dir)
         self.socket_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
-    def _get_socket_path(self, session_name: str) -> Path:
-        return self.socket_dir / f'{session_name}.sock'
-
     def _build_clean_env(self, extra_env: Mapping[str, str] | None=None) -> dict[str, str]:
         env = {
             'PATH': os.environ.get('PATH', '/usr/bin:/bin'),
@@ -103,39 +104,31 @@ class XpraSessionManager:
 
         return env
 
-    def _cleanup_socket_path(self, socket_path: str) -> None:
-        path = Path(socket_path)
-        if not path.exists():
-            return
-
+    def _cleanup_socket_path(self, socket_path: Path) -> None:
         try:
-            path.unlink()
-        except FileNotFoundError:
-            return
+            socket_path.unlink(missing_ok=True)
         except Exception as e:
-            logger.warning('Unable to remove xpra socket %s: %s', path, e)
+            logger.warning('Unable to remove xpra socket %s: %s', socket_path, e)
 
-    def _wait_for_socket_removal(self, socket_path: str, *, timeout: float=10.0) -> bool:
-        path = Path(socket_path)
+    def _wait_for_socket_removal(self, socket_path: Path, *, timeout: float=10.0) -> bool:
         deadline = time.monotonic() + timeout
 
         while time.monotonic() < deadline:
-            if not path.exists():
+            if not socket_path.exists():
                 return True
             time.sleep(0.25)
 
-        return not path.exists()
+        return not socket_path.exists()
 
-    def _wait_for_socket_creation(self, socket_path: str, *, timeout: float=10.0) -> bool:
-        path = Path(socket_path)
+    def _wait_for_socket_creation(self, socket_path: Path, *, timeout: float=10.0) -> bool:
         deadline = time.monotonic() + timeout
 
         while time.monotonic() < deadline:
-            if path.exists():
+            if socket_path.exists():
                 return True
             time.sleep(0.1)
 
-        return path.exists()
+        return socket_path.exists()
 
     def _run_stop_command(self, target: str) -> subprocess.CompletedProcess[str] | None:
         cmd = [self.xpra_command, 'stop', target]
@@ -175,8 +168,9 @@ class XpraSessionManager:
         expires_at = created_at + timedelta(seconds=ttl)
 
         read_fd, write_fd = os.pipe()
-        socket_path = self._get_socket_path(session_name)
+        socket_path = self.socket_dir / f'{session_name}.sock'
         if socket_path.exists():
+            # NOTE: if the socket exists, we probably want to stop the session
             socket_path.unlink()
 
         cmd = [
@@ -265,7 +259,7 @@ class XpraSessionManager:
 
         display = f":{display_num}"
 
-        if not self._wait_for_socket_creation(str(socket_path)):
+        if not self._wait_for_socket_creation(socket_path):
             stderr_output = ""
             if xpra_proc.stderr is not None:
                 try:
@@ -287,7 +281,7 @@ class XpraSessionManager:
             created_at=created_at,
             expires_at=expires_at,
             display=display,
-            socket_path=str(socket_path),
+            socket_path=socket_path,
         )
 
     def serialize_backend_metadata(self, session: Session) -> Mapping[str, Any]:
@@ -303,8 +297,8 @@ class XpraSessionManager:
         return XpraSession(
             created_at=created_at,
             expires_at=expires_at,
-            display=str(backend_metadata.get('display', '')),
-            socket_path=str(backend_metadata.get('socket_path', '')),
+            display=backend_metadata.get('display', ''),
+            socket_path=backend_metadata.get('socket_path', ''),
         )
 
     def get_capture_env(self, session: Session) -> Mapping[str, str | float | bool]:
