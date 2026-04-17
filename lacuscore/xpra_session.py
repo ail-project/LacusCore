@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class XpraSession(Session):
-    """Representation of a single xpra-backed interactive session.
+    """Representation of a single xpra-backed remote headed session.
 
     This extends the backend-agnostic :class:`Session` with the X11
     display identifier and unix socket transport details used by xpra.
@@ -47,9 +47,9 @@ class XpraSession(Session):
 
 
 class XpraSessionManager(SessionManager):
-    """Manage xpra-based interactive browser sessions over per-session unix sockets.
+    """Manage xpra-based remote headed browser sessions over per-session unix sockets.
 
-    Each interactive session starts its own xpra server bound to a local unix
+    Each remote headed session starts its own xpra server bound to a local unix
     socket with HTML5 enabled. This keeps the session transport private to the
     Lacus deployment while allowing a separate reverse proxy or sidecar to
     expose a stable end-user route.
@@ -160,8 +160,8 @@ class XpraSessionManager(SessionManager):
     def start_session(self, *, session_name: str, ttl: int) -> tuple[XpraSession, SessionMetadata, dict[str, str]]:
         """Start an xpra session with the given name and allocate a display dynamically.
 
-        :param session_name: Unique name for the interactive session (e.g. UUID).
-        :param ttl: Time-to-live in seconds for the interactive session.
+        :param session_name: Unique name for the remote headed session (capture UUID).
+        :param ttl: Time-to-live in seconds for the remote headed session.
 
         :return: XpraSession describing the running xpra process and its
             internal transport details.
@@ -383,9 +383,9 @@ class XpraSessionManager(SessionManager):
         return False
 
     def cleanup_expired_sessions(self) -> None:
-        """Stop interactive sessions whose TTL has expired.
+        """Stop remote headed sessions whose TTL has expired.
 
-        This method scans all interactive session metadata keys and, for any
+        This method scans all remote headed session metadata keys and, for any
         session whose ``expires_at`` is in the past and whose status is not
         already terminal ("stopped" or "expired"), stops the underlying xpra
         process and marks the status as "expired".
@@ -419,4 +419,4 @@ class XpraSessionManager(SessionManager):
             try:
                 self.stop_session(session, uuid, metadata, status=SessionStatus.EXPIRED, expire_seconds=60)
             except Exception as e:  # pragma: no cover - defensive
-                logger.warning(f'Unable to expire interactive session {uuid}: {e}')
+                logger.warning(f'Unable to expire remote headed session {uuid}: {e}')

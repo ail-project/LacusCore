@@ -1528,20 +1528,20 @@ files = [
 
 [[package]]
 name = "lookyloo-models"
-version = "0.2.0"
+version = "0.2.1"
 description = "All the Pydantic models used across Lookyloo"
 optional = false
 python-versions = "<4,>=3.10"
 groups = ["main"]
 files = [
-    {file = "lookyloo_models-0.2.0-py3-none-any.whl", hash = "sha256:6d3a0af0f6ec283ea75ec208015e9e76db674bbec4b66294223ac7b30ddf6700"},
-    {file = "lookyloo_models-0.2.0.tar.gz", hash = "sha256:0d0017ed343e3cbff2a6ca36d56b7b351194a374d264c735d07971971815bc19"},
+    {file = "lookyloo_models-0.2.1-py3-none-any.whl", hash = "sha256:5386cdb310bd4f837c689d41e2b0f498b9691cd3bf63974bd6662de4c34dba25"},
+    {file = "lookyloo_models-0.2.1.tar.gz", hash = "sha256:a17aa5d2437742806385465e6feeacd6d4da3f9d0e73a3a796c1c829963371da"},
 ]
 
 [package.dependencies]
 dateparser = ">=1.4.0"
 orjson = ">=3.11.8"
-pydantic = ">=2.12.5"
+pydantic = ">=2.13"
 ua-parser = {version = ">=1.0.1", extras = ["regex"]}
 
 [[package]]
@@ -2191,14 +2191,14 @@ black = ["black (>=25.9.0)"]
 
 [[package]]
 name = "playwrightcapture"
-version = "1.39.1"
+version = "1.39.2"
 description = "A simple library to capture websites using playwright"
 optional = false
 python-versions = "<3.15,>=3.10"
 groups = ["main"]
 files = [
-    {file = "playwrightcapture-1.39.1-py3-none-any.whl", hash = "sha256:4fef2b3f3369d2ee447728f82a05762b011c0b5c58e87791a833c66148d00ec5"},
-    {file = "playwrightcapture-1.39.1.tar.gz", hash = "sha256:cbe2e073869867487e07a1073162e9662e06b407d99efa2a5bad5d90f04394f1"},
+    {file = "playwrightcapture-1.39.2-py3-none-any.whl", hash = "sha256:8f2d435cf0e8486f837a7a11892fecde5c5327a9028a55aaa3d43f7f60ccb0e3"},
+    {file = "playwrightcapture-1.39.2.tar.gz", hash = "sha256:5f54ab8d0f8a3ee4d6ef82ad9e244dd302cd7ab6ac8adc4fe5e2dbd786a40716"},
 ]
 
 [package.dependencies]
@@ -2208,7 +2208,7 @@ async-timeout = {version = ">=5.0.1", markers = "python_version < \"3.11\""}
 beautifulsoup4 = {version = ">=4.14.3", extras = ["charset-normalizer", "lxml"]}
 charset-normalizer = ">=3.4.6,<4.0.0"
 dnspython = ">=2.7.0,<3.0.0"
-lookyloo-models = ">=0.2.0"
+lookyloo-models = ">=0.2.1"
 orjson = ">=3.11.4,<4.0.0"
 playwright = ">=1.58.0"
 playwright-stealth = ">=2.0.3"
@@ -3845,4 +3845,4 @@ docs = ["Sphinx"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.15"
-content-hash = "8943f5addc572ee907400683d3da60612748cdf782d245a237e6815f87feb448"
+content-hash = "1de4343fe76d91077f7806081ef264c20655d290394a0b10868debde9fef7535"

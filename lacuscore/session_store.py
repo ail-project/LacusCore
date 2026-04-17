@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from redis import Redis
 
-from .helpers import SessionMetadata, SessionStatus, InteractiveSessionError
+from .helpers import SessionMetadata, SessionStatus, RemoteHeadfullSessionError
 
 
 @dataclass
@@ -18,7 +18,7 @@ class StoredSessionRecord:
 
 
 class SessionMetadataStore:
-    """Redis-backed storage for interactive session lifecycle and backend state."""
+    """Redis-backed storage for remote headed session lifecycle and backend state."""
 
     _int_fields = {'status', 'created_at', 'expires_at', 'request_finish'}
 
@@ -27,11 +27,11 @@ class SessionMetadataStore:
 
     @staticmethod
     def core_key(uuid: str) -> str:
-        return f'lacus:interactive_session:{uuid}'
+        return f'lacus:headed_session:{uuid}'
 
     @staticmethod
     def backend_key(uuid: str, backend_type: str) -> str:
-        return f'lacus:interactive_session:{uuid}:{backend_type}'
+        return f'lacus:headed_session:{uuid}:{backend_type}'
 
     def _decode_hash(self, raw: dict[bytes, bytes]) -> dict[str, Any]:
         decoded: dict[str, Any] = {}
@@ -50,15 +50,15 @@ class SessionMetadataStore:
               backend_metadata: dict[str, str], *, expire_seconds: int) -> None:
         """Persist session metadata and optional backend state to Redis."""
         if 'backend_type' not in metadata or not metadata.get('backend_type'):
-            raise InteractiveSessionError('No backend type in the metatda the session is invalid')
+            raise RemoteHeadfullSessionError('No backend type in the metatda the session is invalid')
 
-        interactive_session_key = 'lacus:interactive_session'
+        headed_session_key = 'lacus:headed_session'
         now = datetime.now().timestamp()
         core_key = self.core_key(uuid)
         backend_key = self.backend_key(uuid, metadata['backend_type'])
 
         pipeline = self.redis.pipeline()
-        pipeline.zadd(interactive_session_key, mapping={uuid: now})
+        pipeline.zadd(headed_session_key, mapping={uuid: now})
         pipeline.hset(core_key, mapping=metadata)  # type: ignore[arg-type]
         if backend_metadata:
             pipeline.hset(backend_key, mapping=backend_metadata)  # type: ignore[arg-type]
@@ -71,7 +71,7 @@ class SessionMetadataStore:
                       expire_seconds: int=60) -> None:
         """Update session status to a terminal state and set a short expiry."""
         if 'backend_type' not in metadata or not metadata.get('backend_type'):
-            raise InteractiveSessionError('No backend type in the metadata the session is invalid')
+            raise RemoteHeadfullSessionError('No backend type in the metadata the session is invalid')
         core_key = self.core_key(uuid)
         backend_key = self.backend_key(uuid, metadata['backend_type'])
 
@@ -90,7 +90,7 @@ class SessionMetadataStore:
 
         core_metadata = self._decode_hash(raw_core_metadata)
         if 'backend_type' not in core_metadata or not core_metadata.get('backend_type'):
-            raise InteractiveSessionError('No backend type in the metadata the session is invalid')
+            raise RemoteHeadfullSessionError('No backend type in the metadata the session is invalid')
 
         backend_key = self.backend_key(uuid, core_metadata['backend_type'])
         raw_backend_metadata = self.redis.hgetall(backend_key)
@@ -116,7 +116,7 @@ class SessionMetadataStore:
         expired_sessions: list[tuple[str, StoredSessionRecord]] = []
         now_ts = datetime.now().timestamp()
         old_uuids = []
-        for uuid, start_ts in self.redis.zscan_iter('lacus:interactive_session'):
+        for uuid, start_ts in self.redis.zscan_iter('lacus:headed_session'):
             # make sure we don't have a uuid older than 1h in there
             if (datetime.fromtimestamp(start_ts) + timedelta(hours=1)).timestamp() < now_ts:
                 old_uuids.append(uuid)
@@ -141,6 +141,6 @@ class SessionMetadataStore:
                 old_uuids.append(uuid)
 
         if old_uuids:
-            self.redis.zrem('lacus:interactive_session', *old_uuids)
+            self.redis.zrem('lacus:headed_session', *old_uuids)
 
         return expired_sessions

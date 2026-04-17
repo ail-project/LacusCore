@@ -43,7 +43,7 @@ from .helpers import (
     LacusCoreException,
     LacusCoreLogAdapter, CaptureError, RetryCapture,
     CaptureStatus, SessionStatus, CaptureResponse, CaptureResponseJson,
-    SessionMetadata, InteractiveSessionError)
+    SessionMetadata, RemoteHeadfullSessionError)
 from .session import SessionManager
 from .xpra_session import XpraSessionManager
 
@@ -106,6 +106,10 @@ class LacusCore():
     :param i2p_proxy: URL to a HTTP I2P proxy. If you have i2p installed, this is the default: http://127.0.0.1:4444.
     :param only_global_lookups: Discard captures that point to non-public IPs.
     :param max_retries: How many times should we re-try a capture if it failed.
+    :param headed_allowed: Allow to launch captures in a local headed browser.
+    :param remote_headed_allowed: Allow to trigger a capture in a remote headed browser.
+    :param remote_headed_backend_type: The backend type for the remote headed captures (curently, Xpra).
+    :param tt_settings: The settings for the Trusted Timestamps.
     """
 
     def __init__(self, redis_connector: Redis[bytes], /, *,
@@ -116,8 +120,8 @@ class LacusCore():
                  only_global_lookups: bool=True,
                  max_retries: int=3,
                  headed_allowed: bool=False,
-                 interactive_allowed: bool=False,
-                 interactive_backend_type: str | None=None,
+                 remote_headed_allowed: bool=False,
+                 remote_headed_backend_type: str | None=None,
                  tt_settings: TrustedTimestampSettings | None=None,
                  loglevel: str | int='INFO') -> None:
         self.master_logger = logging.getLogger(f'{self.__class__.__name__}')
@@ -135,13 +139,13 @@ class LacusCore():
         self.only_global_lookups = only_global_lookups
         self.max_retries = max_retries
         self.headed_allowed = headed_allowed
-        self.interactive_allowed = interactive_allowed
-        self.interactive_backend_type: str | None = None
-        self.interactive_session_manager: SessionManager | None = None
-        if self.interactive_allowed:
-            self.interactive_backend_type = interactive_backend_type
-        if self.interactive_backend_type:
-            self.interactive_session_manager = self._get_session_manager(self.interactive_backend_type, self.redis)
+        self.remote_headed_allowed = remote_headed_allowed
+        self.remote_headed_backend_type: str | None = None
+        self.remote_headed_session_manager: SessionManager | None = None
+        if self.remote_headed_allowed:
+            self.remote_headed_backend_type = remote_headed_backend_type
+            if self.remote_headed_backend_type:
+                self.remote_headed_session_manager = self._get_session_manager(self.remote_headed_backend_type, self.redis)
         self.dnsresolver: Resolver = Resolver()
         self.dnsresolver.cache = Cache(900)
         self.dnsresolver.timeout = 2
@@ -182,8 +186,7 @@ class LacusCore():
                 with_trusted_timestamps: bool=False,
                 allow_tracking: bool=False,
                 headless: bool=True,
-                interactive: bool=False,
-                interactive_ttl: int=900,
+                remote_headfull: bool=False,
                 max_retries: int | None=None,
                 init_script: str | None=None,
                 force: bool=False,
@@ -221,8 +224,7 @@ class LacusCore():
                 with_trusted_timestamps: bool=False,
                 allow_tracking: bool=False,
                 headless: bool=True,
-                interactive: bool=False,
-                interactive_ttl: int=900,
+                remote_headfull: bool=False,
                 max_retries: int | None=None,
                 init_script: str | None=None,
                 force: bool=False,
@@ -261,8 +263,7 @@ class LacusCore():
         :param with_favicon: If True, PlaywrightCapture will attempt to get the potential favicons for the rendered URL. It is a dirty trick, see this issue for details: https://github.com/Lookyloo/PlaywrightCapture/issues/45
         :param with_trusted_timestamps: If True, PlaywrightCapture will trigger calls to a remote timestamp service. For that to work, this class must have been initialized with tt_settings. See RFC3161 for details: https://www.rfc-editor.org/rfc/rfc3161
         :param allow_tracking: If True, PlaywrightCapture will attempt to click through the cookie banners. It is totally dependent on the framework used on the website.
-        :param interactive: If True, the capture will be handled as an interactive session managed by xpra.
-        :param interactive_ttl: Time-to-live in seconds for an interactive session.
+        :param remote_headfull: If True, the capture will be handled as a remote headfull session.
         :param headless: Whether to run the browser in headless mode. WARNING: requires to run in a graphical environment.
         :param max_retries: The maximum anount of retries for this capture
         :param init_script: A JavaScript that will be executed on each page of the capture.
@@ -290,8 +291,8 @@ class LacusCore():
                         'with_screenshot': with_screenshot, 'with_favicon': with_favicon,
                         'with_trusted_timestamps': with_trusted_timestamps,
                         'allow_tracking': allow_tracking,
-                        'interactive': interactive,
-                        'interactive_ttl': interactive_ttl,
+                        # Quietly force it to false if remote headed is not allowed.
+                        'remote_headfull': remote_headfull if self.remote_headed_allowed else False,
                         'final_wait': final_wait,
                         # Quietly force it to true if headed is not allowed.
                         'headless': headless if self.headed_allowed else True,
@@ -305,9 +306,6 @@ class LacusCore():
                 raise CaptureSettingsError('Invalid settings', e)
         else:
             to_enqueue = settings
-
-        if to_enqueue.interactive and not self.interactive_allowed:
-            raise CaptureSettingsError('Interactive captures are disabled by configuration.')
 
         hash_query = hashlib.sha512(pickle.dumps(to_enqueue)).hexdigest()
         if not force:
@@ -427,10 +425,10 @@ class LacusCore():
 
     def _get_session_manager(self, backend_type: str | None, redis: Redis[bytes]) -> SessionManager:
         if not backend_type:
-            raise LacusCoreException('No backend type provided for the interactive session.')
+            raise LacusCoreException('No backend type provided for the remote headed session.')
         if backend_type == XpraSessionManager.backend_type:
             return XpraSessionManager(redis)
-        raise LacusCoreException(f'Unknown interactive session backend: {backend_type}')
+        raise LacusCoreException(f'Unknown remote headed session backend: {backend_type}')
 
     async def _initialize_capture_context(self, capture: Capture, logger: LacusCoreLogAdapter, url: str) -> None:
         # make sure the initialization doesn't take too long
@@ -443,32 +441,32 @@ class LacusCore():
             logger.warning(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
             raise RetryCapture(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
 
-    async def _run_interactive_capture(self, *, uuid: str, to_capture: CaptureSettings,
-                                       url: str,
-                                       logger: LacusCoreLogAdapter,
-                                       stats_pipeline: Any, today: str) -> tuple[CaptureResponse, bool]:
-        if not self.interactive_allowed or not self.interactive_session_manager:
-            raise CaptureError('Interactive captures are disabled by configuration.')
+    async def _run_remote_headfull_capture(self, *, uuid: str, to_capture: CaptureSettings, url: str,
+                                           logger: LacusCoreLogAdapter,
+                                           stats_pipeline: Any, today: str) -> tuple[CaptureResponse, bool]:
+        if not self.remote_headed_allowed or not self.remote_headed_session_manager:
+            raise CaptureError('Remote Headfull captures are disabled by configuration.')
         if not self.headed_allowed:
-            raise CaptureError('Interactive captures require headed_allowed=True.')
+            raise CaptureError('Remote Headfull captures require headed_allowed=True.')
 
         result: CaptureResponse = {}
         errors: list[str] = []
 
-        session, metadata, backend_metadata = self.interactive_session_manager.start_session(session_name=uuid, ttl=to_capture.interactive_ttl)
+        session, metadata, backend_metadata = self.remote_headed_session_manager.start_session(session_name=uuid,
+                                                                                               ttl=to_capture.general_timeout_in_sec if to_capture.general_timeout_in_sec is not None else 300)
 
         try:
             # NOTE: that shouldn't be needed. at this point, the capture should for sure be headless.
             to_capture.headless = False
 
-            logger.debug(f'Initializing interactive session for {url}')
+            logger.debug(f'Initializing remote headed session for {url}')
             stats_pipeline.sadd(f'stats:{today}:captures', url)
             async with Capture(
                     loglevel=self.master_logger.getEffectiveLevel(),
                     uuid=uuid,
                     capture_settings=to_capture,
                     tt_settings=self.tt_settings,
-                    env=dict(self.interactive_session_manager.get_capture_env(session))) as capture:
+                    env=dict(self.remote_headed_session_manager.get_capture_env(session))) as capture:
                 await self._initialize_capture_context(capture, logger, url)
 
                 # prepare and open the page the user will interact with.
@@ -477,8 +475,9 @@ class LacusCore():
 
                 status = SessionStatus.READY
                 metadata['status'] = int(status)
-                self.interactive_session_manager.session_store.write(uuid, metadata,
-                                                                     backend_metadata, expire_seconds=3600)
+                self.remote_headed_session_manager.session_store.write(uuid, metadata,
+                                                                       backend_metadata,
+                                                                       expire_seconds=self.max_capture_time)
 
                 expires_at_ts = int(session.expires_at.timestamp())
                 poll_interval = 1.0
@@ -503,7 +502,7 @@ class LacusCore():
                         # This shouldn't happen, but just in case (the metadata should exist)
                         status = SessionStatus.ERROR
                         result['error'] = 'Missing metadata, cannot finish capture'
-                        raise InteractiveSessionError('Unable to process capture, missing metadata')
+                        raise RemoteHeadfullSessionError('Unable to process capture, missing metadata')
 
                 try:
                     async with timeout(self.max_capture_time) as capture_timeout:
@@ -518,11 +517,11 @@ class LacusCore():
                         )
                 except (TimeoutError, asyncio.exceptions.TimeoutError):
                     timeout_expired(capture_timeout, logger, 'Capture took too long.')
-                    logger.warning(f'[Interactive] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
-                    raise RetryCapture(f'[Interactive] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+                    logger.warning(f'[RemoteHeaded] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+                    raise RetryCapture(f'[RemoteHeaded] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
                 except PlaywrightCaptureException as e:
-                    logger.warning(f'[Interactive] Unrecoverable exception during capture: {e}')
-                    raise CaptureError(f'[Interactive] Unrecoverable exception during capture: {e}')
+                    logger.warning(f'[RemoteHeaded] Unrecoverable exception during capture: {e}')
+                    raise CaptureError(f'[RemoteHeaded] Unrecoverable exception during capture: {e}')
 
                 result = cast(CaptureResponse, playwright_result)
                 status = SessionStatus.STOPPED
@@ -534,31 +533,31 @@ class LacusCore():
                 return result, should_retry
         except RetryCapture as e:
             raise e
-        except InteractiveSessionError as e:
-            logger.warning(f'[Interactive] Unable to complete session: {e}')
+        except RemoteHeadfullSessionError as e:
+            logger.warning(f'[RemoteHeaded] Unable to complete session: {e}')
             status = SessionStatus.ERROR
-            raise CaptureError(f'[Interactive] Unable to complete interactive session: {e}')
+            raise CaptureError(f'[RemoteHeaded] Unable to complete remote headed session: {e}')
         except (PlaywrightCaptureException, InvalidPlaywrightParameter) as e:
             status = SessionStatus.ERROR
-            logger.warning(f'[Interactive] Invalid parameters for the capture of {url} - {e}')
-            raise CaptureError(f'[Interactive] Invalid parameters for the capture of {url} - {e}')
+            logger.warning(f'[RemoteHeaded] Invalid parameters for the capture of {url} - {e}')
+            raise CaptureError(f'[RemoteHeaded] Invalid parameters for the capture of {url} - {e}')
         except asyncio.CancelledError:
             status = SessionStatus.ERROR
-            logger.warning(f'[Interactive] The capture of {url} has been cancelled.')
+            logger.warning(f'[RemoteHeaded] The capture of {url} has been cancelled.')
             # The capture can be canceled if it has been running for way too long.
             # We can give it another short.
-            raise RetryCapture(f'[Interactive]  The capture of {url} has been cancelled.')
+            raise RetryCapture(f'[RemoteHeaded]  The capture of {url} has been cancelled.')
         except Exception as e:
             status = SessionStatus.ERROR
-            logger.exception(f'[Interactive] Something went poorly {url} - {e}')
-            raise CaptureError(f'[Interactive] Something went poorly {url} - {e}')
+            logger.exception(f'[RemoteHeaded] Something went poorly {url} - {e}')
+            raise CaptureError(f'[RemoteHeaded] Something went poorly {url} - {e}')
         finally:
-            self.interactive_session_manager.stop_session(session, uuid, metadata,
-                                                          status=status, expire_seconds=60)
+            self.remote_headed_session_manager.stop_session(session, uuid, metadata,
+                                                            status=status, expire_seconds=60)
             # NOTE: maybe move that somewhere else
-            self.interactive_session_manager.cleanup_expired_sessions()
+            self.remote_headed_session_manager.cleanup_expired_sessions()
 
-        raise CaptureError('[Interactive] Should never land there, but that capture failed badly.')
+        raise CaptureError('[RemoteHeaded] Should never land there, but that capture failed badly.')
 
     async def _run_standard_capture(self, *, uuid: str, to_capture: CaptureSettings,
                                     url: str,
@@ -673,8 +672,8 @@ class LacusCore():
                 logger.warning(f'Settings invalid: {e}')
                 raise CaptureSettingsError('Invalid settings', e)
 
-            # NOTE: never retry interactive captures
-            if to_capture.interactive:
+            # NOTE: never retry remote headfull captures
+            if to_capture.remote_headfull:
                 max_retries = 0
             else:
                 # If the class is initialized with max_retries below the one provided in the settings, we use the lowest value
@@ -757,9 +756,9 @@ class LacusCore():
                     result = {'error': f'Unable to find hostname or IP in the query: "{url}".'}
                     raise CaptureError(f'Unable to find hostname or IP in the query: "{url}".')
 
-            if to_capture.interactive:
-                # NOTE: should_retry not used in the case of an interactive session.
-                result, should_retry = await self._run_interactive_capture(
+            if to_capture.remote_headfull:
+                # NOTE: should_retry not used in the case of a remote headfull session.
+                result, should_retry = await self._run_remote_headfull_capture(
                     uuid=uuid,
                     to_capture=to_capture,
                     url=url,
@@ -1062,28 +1061,28 @@ class LacusCore():
         return resolved_ips
 
     def request_finish(self, uuid: str) -> bool:
-        """Mark an interactive session as ready for final capture.
+        """Mark a remote headfull session as ready for final capture.
 
         Returns the updated metadata, or None if no session exists.
         """
-        if not self.interactive_allowed or not self.interactive_session_manager:
-            raise InteractiveSessionError('Interactive captures are disabled by configuration.')
-        return self.interactive_session_manager.session_store.request_finish(uuid)
+        if not self.remote_headed_allowed or not self.remote_headed_session_manager:
+            raise RemoteHeadfullSessionError('Remote headfull captures are disabled by configuration.')
+        return self.remote_headed_session_manager.session_store.request_finish(uuid)
 
     def get_session_metadata(self, uuid: str) -> SessionMetadata | None:
         """Return public session metadata for a capture UUID, or None if no session exists."""
-        if not self.interactive_allowed or not self.interactive_session_manager:
-            raise InteractiveSessionError('Interactive captures are disabled by configuration.')
-        record = self.interactive_session_manager.session_store.read(uuid)
+        if not self.remote_headed_allowed or not self.remote_headed_session_manager:
+            raise RemoteHeadfullSessionError('Remote headfull captures are disabled by configuration.')
+        record = self.remote_headed_session_manager.session_store.read(uuid)
         if not record:
             return None
         return cast(SessionMetadata, dict(record.metadata))
 
     def get_session_backend_metadata(self, uuid: str) -> dict[str, Any] | None:
         """Return backend-specific metadata for trusted session transport callers."""
-        if not self.interactive_allowed or not self.interactive_session_manager:
-            raise InteractiveSessionError('Interactive captures are disabled by configuration.')
-        record = self.interactive_session_manager.session_store.read(uuid)
+        if not self.remote_headed_allowed or not self.remote_headed_session_manager:
+            raise RemoteHeadfullSessionError('Remote headfull captures are disabled by configuration.')
+        record = self.remote_headed_session_manager.session_store.read(uuid)
         if not record:
             return None
         return dict(record.backend_metadata)

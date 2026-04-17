@@ -13,10 +13,10 @@ from .session_store import SessionMetadataStore
 
 @dataclass
 class Session:
-    """Backend-agnostic representation of an interactive session.
+    """Backend-agnostic representation of a remote headfull session.
 
     This structure captures the minimal set of fields that callers need in
-    order to expose and manage an interactive browsing session, independent
+    order to expose and manage a remote headfull session, independent
     of the underlying implementation (xpra or otherwise).
     """
 
@@ -25,7 +25,7 @@ class Session:
 
 
 class SessionManager(Protocol):
-    """Protocol for objects able to manage interactive sessions.
+    """Protocol for objects able to manage remote headfull sessions.
 
     Concrete backends (for example, an xpra-based implementation) are free
     to accept additional keyword-only arguments in ``start_session``. The

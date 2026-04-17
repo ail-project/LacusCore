@@ -31,7 +31,7 @@ class RetryCapture(LacusCoreException):
     pass
 
 
-class InteractiveSessionError(LacusCoreException):
+class RemoteHeadfullSessionError(LacusCoreException):
     pass
 
 
@@ -56,7 +56,7 @@ class CaptureStatus(IntEnum):
 
 @unique
 class SessionStatus(IntEnum):
-    '''The status of an interactive session'''
+    '''The status of a remote headfull session'''
 
     UNKNOWN = -1
     STARTING = 0
@@ -100,7 +100,7 @@ class CaptureResponseJson(TypedDict, total=False):
 
 
 class SessionMetadata(TypedDict, total=False):
-    """Backend-agnostic interactive session metadata stored in Redis."""
+    """Backend-agnostic remote headfull session metadata stored in Redis."""
 
     status: int
     backend_type: str
