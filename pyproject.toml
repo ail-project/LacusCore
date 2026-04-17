@@ -1,6 +1,6 @@
 [project]
 name = "lacuscore"
-version = "1.24.0"
+version = "1.24.1"
 description = "Core of Lacus, usable as a module"
 authors = [
     {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
@@ -14,11 +14,11 @@ requires-python = ">=3.10,<3.15"
 dynamic = [ "classifiers" ]
 
 dependencies = [
-    "playwrightcapture[recaptcha] (>=1.39.0)",
+    "playwrightcapture[recaptcha] (>=1.39.1)",
     "redis[hiredis] (>=5.3.0,<6.0.0)",
     "dnspython (>=2.8.0)",
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
-    "pydantic (>=2.12.5)",
+    "pydantic (>=2.13.2)",
     "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\"",
     "lookyloo-models (>=0.2.0)"
 ]
@@ -44,7 +44,7 @@ classifiers = [
 docs = ["Sphinx (>=9.1.0) ; python_version >= \"3.12\""]
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^1.20.0"
+mypy = "^1.20.1"
 types-redis = {version = "^4.6.0.20241004"}
 types-requests = "^2.33.0.20260408"
 types-beautifulsoup4 = "^4.12.0.20250516"
