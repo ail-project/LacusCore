@@ -31,6 +31,10 @@ class RetryCapture(LacusCoreException):
     pass
 
 
+class InteractiveSessionError(LacusCoreException):
+    pass
+
+
 class LacusCoreLogAdapter(LoggerAdapter):  # type: ignore[type-arg]
     """
     Prepend log entry with the UUID of the capture
@@ -100,7 +104,6 @@ class SessionMetadata(TypedDict, total=False):
 
     status: int
     backend_type: str
-    view_url: str
     created_at: int
     expires_at: int
     capture_requested_at: int

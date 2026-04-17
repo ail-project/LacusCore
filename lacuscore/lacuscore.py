@@ -16,7 +16,7 @@ import unicodedata
 
 from asyncio import Task
 from base64 import b64decode, b64encode
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from ipaddress import ip_address, IPv4Address, IPv6Address
 from tempfile import NamedTemporaryFile
 from typing import Literal, Any, overload, cast
@@ -43,22 +43,18 @@ from .helpers import (
     LacusCoreException,
     LacusCoreLogAdapter, CaptureError, RetryCapture,
     CaptureStatus, SessionStatus, CaptureResponse, CaptureResponseJson,
-    SessionMetadata)
+    SessionMetadata, InteractiveSessionError)
 from .session import SessionManager
-from .session_store import SessionMetadataStore
 from .xpra_session import XpraSessionManager
 
 if sys.version_info < (3, 11):
     from async_timeout import timeout
-    from datetime import timezone
-    UTC = timezone.utc
 
     def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
         if timeout_cm.expired:
             logger.warning(f'Timeout expired: {error_message}')
 
 else:
-    from datetime import UTC
     from asyncio import timeout
 
     def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
@@ -140,9 +136,12 @@ class LacusCore():
         self.max_retries = max_retries
         self.headed_allowed = headed_allowed
         self.interactive_allowed = interactive_allowed
-        self.interactive_backend_type = interactive_backend_type
-        self.session_store = SessionMetadataStore(self.redis)
-
+        self.interactive_backend_type: str | None = None
+        self.interactive_session_manager: SessionManager | None = None
+        if self.interactive_allowed:
+            self.interactive_backend_type = interactive_backend_type
+        if self.interactive_backend_type:
+            self.interactive_session_manager = self._get_session_manager(self.interactive_backend_type, self.redis)
         self.dnsresolver: Resolver = Resolver()
         self.dnsresolver.cache = Cache(900)
         self.dnsresolver.timeout = 2
@@ -426,86 +425,12 @@ class LacusCore():
             return CaptureStatus.DONE
         return CaptureStatus.UNKNOWN
 
-    def _get_session_manager(self, backend_type: str | None) -> SessionManager:
+    def _get_session_manager(self, backend_type: str | None, redis: Redis[bytes]) -> SessionManager:
+        if not backend_type:
+            raise LacusCoreException('No backend type provided for the interactive session.')
         if backend_type == XpraSessionManager.backend_type:
-            return XpraSessionManager()  # type: ignore[return-value]  # structural subtype; mypy cannot verify Protocol **kwargs
+            return XpraSessionManager(redis)
         raise LacusCoreException(f'Unknown interactive session backend: {backend_type}')
-
-    def get_session_metadata(self, uuid: str) -> SessionMetadata | None:
-        """Return public session metadata for a capture UUID, or None if no session exists."""
-        record = self.session_store.read(uuid)
-        if not record:
-            return None
-        return cast(SessionMetadata, dict(record.metadata))
-
-    def get_session_backend_metadata(self, uuid: str) -> dict[str, Any] | None:
-        """Return backend-specific metadata for trusted session transport callers."""
-        record = self.session_store.read(uuid)
-        if not record:
-            return None
-        return dict(record.backend_metadata)
-
-    def request_session_capture(self, uuid: str) -> SessionMetadata | None:
-        """Mark an interactive session as ready for final capture.
-
-        Returns the updated metadata, or None if no session exists.
-        """
-        record = self.session_store.request_finish(uuid)
-        if not record:
-            return None
-        return cast(SessionMetadata, dict(record.metadata))
-
-    def stop_session(self, uuid: str, *, status: SessionStatus=SessionStatus.STOPPED) -> None:
-        """Stop an interactive session associated with a capture UUID."""
-        record = self.session_store.read(uuid)
-        if not record:
-            return
-
-        metadata = record.metadata
-        try:
-            created_at_ts = int(metadata.get('created_at', 0)) if metadata.get('created_at') is not None else 0
-            expires_at_ts = int(metadata.get('expires_at', 0)) if metadata.get('expires_at') is not None else 0
-        except (TypeError, ValueError):
-            created_at_ts = 0
-            expires_at_ts = 0
-
-        manager = self._get_session_manager(metadata.get('backend_type'))
-        session = manager.restore_session(
-            created_at=datetime.fromtimestamp(created_at_ts, UTC) if created_at_ts else datetime.fromtimestamp(0, UTC),
-            expires_at=datetime.fromtimestamp(expires_at_ts, UTC) if expires_at_ts else datetime.fromtimestamp(0, UTC),
-            view_url=str(metadata['view_url']) if metadata.get('view_url') else None,
-            backend_metadata=record.backend_metadata,
-        )
-
-        if not manager.stop_session(session):
-            backend_type = str(metadata.get('backend_type', 'unknown'))
-            self.master_logger.warning('Unable to confirm %s shutdown for interactive session %s.', backend_type, uuid)
-
-        self.session_store.mark_terminal(uuid, metadata, status=status, expire_seconds=60)
-
-    def cleanup_expired_sessions(self) -> None:
-        """Stop interactive sessions whose TTL has expired.
-
-        This method scans all interactive session metadata keys and, for any
-        session whose ``expires_at`` is in the past and whose status is not
-        already terminal ("stopped" or "expired"), stops the underlying xpra
-        process and marks the status as "expired".
-
-        It is designed to be called periodically by an external scheduler.
-        """
-
-        now_ts = int(time.time())
-        try:
-            expired_sessions = self.session_store.scan_expired(now_ts)
-        except RedisConnectionError as e:
-            self.master_logger.warning(f'Unable to scan interactive sessions: {e}')
-            return
-
-        for uuid, _record in expired_sessions:
-            try:
-                self.stop_session(uuid, status=SessionStatus.EXPIRED)
-            except Exception as e:  # pragma: no cover - defensive
-                self.master_logger.warning(f'Unable to expire interactive session {uuid}: {e}')
 
     async def _initialize_capture_context(self, capture: Capture, logger: LacusCoreLogAdapter, url: str) -> None:
         # make sure the initialization doesn't take too long
@@ -521,8 +446,8 @@ class LacusCore():
     async def _run_interactive_capture(self, *, uuid: str, to_capture: CaptureSettings,
                                        url: str,
                                        logger: LacusCoreLogAdapter,
-                                       stats_pipeline: Any, today: str) -> CaptureResponse:
-        if not self.interactive_allowed:
+                                       stats_pipeline: Any, today: str) -> tuple[CaptureResponse, bool]:
+        if not self.interactive_allowed or not self.interactive_session_manager:
             raise CaptureError('Interactive captures are disabled by configuration.')
         if not self.headed_allowed:
             raise CaptureError('Interactive captures require headed_allowed=True.')
@@ -530,21 +455,10 @@ class LacusCore():
         result: CaptureResponse = {}
         errors: list[str] = []
 
-        session_manager = self._get_session_manager(self.interactive_backend_type)
-        session = session_manager.start_session(session_name=uuid, ttl=to_capture.interactive_ttl)
-
-        metadata: SessionMetadata = {
-            'status': int(SessionStatus.STARTING),
-            'backend_type': session_manager.backend_type,
-            'created_at': int(session.created_at.timestamp()),
-            'expires_at': int(session.expires_at.timestamp()),
-        }
-        backend_metadata = dict(session_manager.serialize_backend_metadata(session))
-        metadata_ttl = max(1, int(to_capture.interactive_ttl) + 60)
-        self.session_store.write(uuid, metadata, backend_metadata, expire_seconds=metadata_ttl)
+        session, metadata, backend_metadata = self.interactive_session_manager.start_session(session_name=uuid, ttl=to_capture.interactive_ttl)
 
         try:
-            # NOTE: that shouldn't be needed, at this point, the capture should for sure be headless.
+            # NOTE: that shouldn't be needed. at this point, the capture should for sure be headless.
             to_capture.headless = False
 
             logger.debug(f'Initializing interactive session for {url}')
@@ -554,95 +468,97 @@ class LacusCore():
                     uuid=uuid,
                     capture_settings=to_capture,
                     tt_settings=self.tt_settings,
-                    env=dict(session_manager.get_capture_env(session))) as capture:
+                    env=dict(self.interactive_session_manager.get_capture_env(session))) as capture:
                 await self._initialize_capture_context(capture, logger, url)
 
                 # prepare and open the page the user will interact with.
                 page = await capture.setup_page_capture(allow_tracking=to_capture.allow_tracking)
                 await capture.open_page(page, url, errors, to_capture.referer)
 
-                metadata['status'] = int(SessionStatus.READY)
-                self.session_store.write(uuid, metadata, backend_metadata, expire_seconds=metadata_ttl)
+                status = SessionStatus.READY
+                metadata['status'] = int(status)
+                self.interactive_session_manager.session_store.write(uuid, metadata,
+                                                                     backend_metadata, expire_seconds=3600)
 
                 expires_at_ts = int(session.expires_at.timestamp())
                 poll_interval = 1.0
+                finish_requested = False
 
-                while True:
+                while not finish_requested:
+                    # wait for either the timeout, or the user trigger
                     await asyncio.sleep(poll_interval)
                     now_ts = int(time.time())
 
                     if expires_at_ts and now_ts >= expires_at_ts:
-                        self.session_store.mark_terminal(uuid, metadata, status=SessionStatus.EXPIRED, expire_seconds=60)
-                        session_manager.stop_session(session)
-                        return {
-                            'error': 'Interactive session expired before capture.',
-                            'status': CaptureStatus.DONE,
-                        }
+                        # Got to the expiration time, trigger finish
+                        status = SessionStatus.EXPIRED
+                        self.request_finish(uuid)
 
-                    try:
-                        record = self.session_store.read(uuid)
-                    except RedisConnectionError as e:  # pragma: no cover - defensive
-                        logger.warning(f'Unable to poll interactive session metadata for {uuid}: {e}')
-                        continue
+                    # Update the metadata
+                    if m := self.get_session_metadata(uuid):
+                        metadata = m
+                        if metadata.get('finish_requested'):
+                            finish_requested = True
+                    else:
+                        # This shouldn't happen, but just in case (the metadata should exist)
+                        status = SessionStatus.ERROR
+                        result['error'] = 'Missing metadata, cannot finish capture'
+                        raise InteractiveSessionError('Unable to process capture, missing metadata')
 
-                    if not record:
-                        session_manager.stop_session(session)
-                        return {
-                            'error': 'Interactive session metadata missing; assuming stopped.',
-                            'status': CaptureStatus.DONE,
-                        }
+                try:
+                    async with timeout(self.max_capture_time) as capture_timeout:
+                        playwright_result = await capture.capture_page(
+                            page=page,
+                            current_page_only=True,
+                            max_depth_capture_time=self.max_capture_time,
+                            rendered_hostname_only=to_capture.rendered_hostname_only,
+                            with_screenshot=to_capture.with_screenshot,
+                            with_favicon=to_capture.with_favicon,
+                            with_trusted_timestamps=to_capture.with_trusted_timestamps,
+                        )
+                except (TimeoutError, asyncio.exceptions.TimeoutError):
+                    timeout_expired(capture_timeout, logger, 'Capture took too long.')
+                    logger.warning(f'[Interactive] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+                    raise RetryCapture(f'[Interactive] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+                except PlaywrightCaptureException as e:
+                    logger.warning(f'[Interactive] Unrecoverable exception during capture: {e}')
+                    raise CaptureError(f'[Interactive] Unrecoverable exception during capture: {e}')
 
-                    record_metadata = record.metadata
-                    status_val = int(record_metadata.get('status', int(SessionStatus.UNKNOWN)))
-                    finish_requested = int(record_metadata.get(self.session_store.finish_key, 0) or 0) > 0  # type: ignore[call-overload]
+                result = cast(CaptureResponse, playwright_result)
+                status = SessionStatus.STOPPED
+                if 'error' in result and 'error_name' in result:
+                    # generate stats
+                    if result['error_name'] is not None:
+                        stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
+                should_retry = capture.should_retry
+                return result, should_retry
+        except RetryCapture as e:
+            raise e
+        except InteractiveSessionError as e:
+            logger.warning(f'[Interactive] Unable to complete session: {e}')
+            status = SessionStatus.ERROR
+            raise CaptureError(f'[Interactive] Unable to complete interactive session: {e}')
+        except (PlaywrightCaptureException, InvalidPlaywrightParameter) as e:
+            status = SessionStatus.ERROR
+            logger.warning(f'[Interactive] Invalid parameters for the capture of {url} - {e}')
+            raise CaptureError(f'[Interactive] Invalid parameters for the capture of {url} - {e}')
+        except asyncio.CancelledError:
+            status = SessionStatus.ERROR
+            logger.warning(f'[Interactive] The capture of {url} has been cancelled.')
+            # The capture can be canceled if it has been running for way too long.
+            # We can give it another short.
+            raise RetryCapture(f'[Interactive]  The capture of {url} has been cancelled.')
+        except Exception as e:
+            status = SessionStatus.ERROR
+            logger.exception(f'[Interactive] Something went poorly {url} - {e}')
+            raise CaptureError(f'[Interactive] Something went poorly {url} - {e}')
+        finally:
+            self.interactive_session_manager.stop_session(session, uuid, metadata,
+                                                          status=status, expire_seconds=60)
+            # NOTE: maybe move that somewhere else
+            self.interactive_session_manager.cleanup_expired_sessions()
 
-                    if finish_requested:
-                        try:
-                            async with timeout(self.max_capture_time) as capture_timeout:
-                                playwright_result = await capture.capture_page(
-                                    page=page,
-                                    current_page_only=True,
-                                    max_depth_capture_time=self.max_capture_time,
-                                    rendered_hostname_only=to_capture.rendered_hostname_only,
-                                    with_screenshot=to_capture.with_screenshot,
-                                    with_favicon=to_capture.with_favicon,
-                                    with_trusted_timestamps=to_capture.with_trusted_timestamps,
-                                )
-                        except (TimeoutError, asyncio.exceptions.TimeoutError):
-                            timeout_expired(capture_timeout, logger, 'Interactive capture took too long.')
-                            logger.warning(
-                                f'The interactive capture of {url} took longer than the allowed max capture time '
-                                f'({self.max_capture_time}s)'
-                            )
-                            raise RetryCapture(
-                                f'The interactive capture of {url} took longer than the allowed max capture time '
-                                f'({self.max_capture_time}s)'
-                            )
-
-                        result = cast(CaptureResponse, playwright_result)
-                        if start_time := self.redis.zscore('lacus:ongoing', uuid):
-                            runtime = time.time() - start_time
-                            logger.info(f'Interactive capture of {url} finished - Runtime: {runtime}s')
-                            result['runtime'] = runtime
-                        else:
-                            logger.info(f'Interactive capture of {url} finished - No Runtime.')
-
-                        self.session_store.mark_terminal(uuid, record_metadata, status=SessionStatus.STOPPED, expire_seconds=60)
-                        session_manager.stop_session(session)
-                        return result
-
-                    if status_val in (int(SessionStatus.STOPPED), int(SessionStatus.EXPIRED), int(SessionStatus.ERROR)):
-                        self.session_store.mark_terminal(uuid, record_metadata,
-                                                         status=SessionStatus(status_val),
-                                                         expire_seconds=60)
-                        session_manager.stop_session(session)
-                        return {'runtime': None, 'status': CaptureStatus.DONE}
-        except Exception:
-            self.session_store.mark_terminal(uuid, metadata, status=SessionStatus.ERROR, expire_seconds=60)
-            session_manager.stop_session(session)
-            raise
-
-        return result  # pragma: no cover — the loop always exits via return or raise above
+        raise CaptureError('[Interactive] Should never land there, but that capture failed badly.')
 
     async def _run_standard_capture(self, *, uuid: str, to_capture: CaptureSettings,
                                     url: str,
@@ -757,9 +673,13 @@ class LacusCore():
                 logger.warning(f'Settings invalid: {e}')
                 raise CaptureSettingsError('Invalid settings', e)
 
-            # If the class is initialized with max_retries below the one provided in the settings, we use the lowest value
-            # NOTE: make sure the variable is initialized *before* we raise any RetryCapture
-            max_retries = min([to_capture.max_retries, self.max_retries]) if to_capture.max_retries is not None else self.max_retries
+            # NOTE: never retry interactive captures
+            if to_capture.interactive:
+                max_retries = 0
+            else:
+                # If the class is initialized with max_retries below the one provided in the settings, we use the lowest value
+                # NOTE: make sure the variable is initialized *before* we raise any RetryCapture
+                max_retries = min([to_capture.max_retries, self.max_retries]) if to_capture.max_retries is not None else self.max_retries
 
             if to_capture.document:
                 # we do not have a URL yet.
@@ -838,7 +758,8 @@ class LacusCore():
                     raise CaptureError(f'Unable to find hostname or IP in the query: "{url}".')
 
             if to_capture.interactive:
-                result = await self._run_interactive_capture(
+                # NOTE: should_retry not used in the case of an interactive session.
+                result, should_retry = await self._run_interactive_capture(
                     uuid=uuid,
                     to_capture=to_capture,
                     url=url,
@@ -855,14 +776,14 @@ class LacusCore():
                     stats_pipeline=stats_pipeline,
                     today=today,
                 )
-                # NOTE: set a should retry in the interactive capture?
-                if should_retry:
-                    # PlaywrightCapture considers this capture elligible for a retry
-                    logger.info('PlaywrightCapture considers it elligible for a retry.')
-                    raise RetryCapture('PlaywrightCapture considers it elligible for a retry.')
-                elif self.redis.exists(f'lacus:capture_retry:{uuid}'):
-                    # this is a retry that worked
-                    stats_pipeline.sadd(f'stats:{today}:retry_success', url)
+
+            if should_retry:
+                # PlaywrightCapture considers this capture elligible for a retry
+                logger.info('PlaywrightCapture considers it elligible for a retry.')
+                raise RetryCapture('PlaywrightCapture considers it elligible for a retry.')
+            elif self.redis.exists(f'lacus:capture_retry:{uuid}'):
+                # this is a retry that worked
+                stats_pipeline.sadd(f'stats:{today}:retry_success', url)
         except RetryCapture as e:
             if not result and str(e):
                 result = {'error': str(e)}
@@ -1139,3 +1060,30 @@ class LacusCore():
                 logger.debug(f'No AAAA record for "{hostname}": {e}')
             break
         return resolved_ips
+
+    def request_finish(self, uuid: str) -> bool:
+        """Mark an interactive session as ready for final capture.
+
+        Returns the updated metadata, or None if no session exists.
+        """
+        if not self.interactive_allowed or not self.interactive_session_manager:
+            raise InteractiveSessionError('Interactive captures are disabled by configuration.')
+        return self.interactive_session_manager.session_store.request_finish(uuid)
+
+    def get_session_metadata(self, uuid: str) -> SessionMetadata | None:
+        """Return public session metadata for a capture UUID, or None if no session exists."""
+        if not self.interactive_allowed or not self.interactive_session_manager:
+            raise InteractiveSessionError('Interactive captures are disabled by configuration.')
+        record = self.interactive_session_manager.session_store.read(uuid)
+        if not record:
+            return None
+        return cast(SessionMetadata, dict(record.metadata))
+
+    def get_session_backend_metadata(self, uuid: str) -> dict[str, Any] | None:
+        """Return backend-specific metadata for trusted session transport callers."""
+        if not self.interactive_allowed or not self.interactive_session_manager:
+            raise InteractiveSessionError('Interactive captures are disabled by configuration.')
+        record = self.interactive_session_manager.session_store.read(uuid)
+        if not record:
+            return None
+        return dict(record.backend_metadata)

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import time
+from datetime import datetime, timedelta
 from typing import Any, cast
 
 from redis import Redis
-from redis.exceptions import WatchError
 
-from .helpers import SessionMetadata, SessionStatus
+from .helpers import SessionMetadata, SessionStatus, InteractiveSessionError
 
 
 @dataclass
@@ -21,19 +20,18 @@ class StoredSessionRecord:
 class SessionMetadataStore:
     """Redis-backed storage for interactive session lifecycle and backend state."""
 
-    _int_fields = {'status', 'created_at', 'expires_at', 'capture_requested_at'}
+    _int_fields = {'status', 'created_at', 'expires_at', 'request_finish'}
 
-    def __init__(self, redis: Redis[bytes], *, finish_key: str='capture_requested_at') -> None:
+    def __init__(self, redis: Redis[bytes]) -> None:
         self.redis: Redis[bytes] = redis
-        self.finish_key = finish_key
 
     @staticmethod
     def core_key(uuid: str) -> str:
-        return f'lacus:session:{uuid}'
+        return f'lacus:interactive_session:{uuid}'
 
     @staticmethod
     def backend_key(uuid: str, backend_type: str) -> str:
-        return f'lacus:session:{uuid}:{backend_type}'
+        return f'lacus:interactive_session:{uuid}:{backend_type}'
 
     def _decode_hash(self, raw: dict[bytes, bytes]) -> dict[str, Any]:
         decoded: dict[str, Any] = {}
@@ -49,52 +47,53 @@ class SessionMetadataStore:
         return decoded
 
     def write(self, uuid: str, metadata: SessionMetadata,
-              backend_metadata: dict[str, Any] | None=None, *, expire_seconds: int) -> None:
+              backend_metadata: dict[str, str], *, expire_seconds: int) -> None:
         """Persist session metadata and optional backend state to Redis."""
-        core_metadata = dict(metadata)
-        backend_type = str(core_metadata.get('backend_type') or 'xpra')
-        core_metadata['backend_type'] = backend_type
+        if 'backend_type' not in metadata or not metadata.get('backend_type'):
+            raise InteractiveSessionError('No backend type in the metatda the session is invalid')
+
+        interactive_session_key = 'lacus:interactive_session'
+        now = datetime.now().timestamp()
+        core_key = self.core_key(uuid)
+        backend_key = self.backend_key(uuid, metadata['backend_type'])
 
         pipeline = self.redis.pipeline()
-        pipeline.hset(self.core_key(uuid), mapping=core_metadata)  # type: ignore[arg-type]
-        if backend_metadata is not None:
-            backend_key = self.backend_key(uuid, backend_type)
-            if backend_metadata:
-                pipeline.hset(backend_key, mapping=backend_metadata)  # type: ignore[arg-type]
-            else:
-                pipeline.delete(backend_key)
+        pipeline.zadd(interactive_session_key, mapping={uuid: now})
+        pipeline.hset(core_key, mapping=metadata)  # type: ignore[arg-type]
+        if backend_metadata:
+            pipeline.hset(backend_key, mapping=backend_metadata)  # type: ignore[arg-type]
 
-        pipeline.expire(self.core_key(uuid), expire_seconds)
-        pipeline.expire(self.backend_key(uuid, backend_type), expire_seconds)
-
+        pipeline.expire(core_key, expire_seconds)
+        pipeline.expire(backend_key, expire_seconds)
         pipeline.execute()
 
     def mark_terminal(self, uuid: str, metadata: SessionMetadata, *, status: SessionStatus,
                       expire_seconds: int=60) -> None:
         """Update session status to a terminal state and set a short expiry."""
-        core_metadata = dict(metadata)
-        backend_type = str(core_metadata.get('backend_type') or 'xpra')
-        core_metadata['backend_type'] = backend_type
-        core_metadata['status'] = int(status)
+        if 'backend_type' not in metadata or not metadata.get('backend_type'):
+            raise InteractiveSessionError('No backend type in the metadata the session is invalid')
+        core_key = self.core_key(uuid)
+        backend_key = self.backend_key(uuid, metadata['backend_type'])
 
         pipeline = self.redis.pipeline()
-        pipeline.hset(self.core_key(uuid), mapping=core_metadata)  # type: ignore[arg-type]
-        pipeline.hdel(self.core_key(uuid), self.finish_key)
-        pipeline.expire(self.core_key(uuid), expire_seconds)
-        pipeline.expire(self.backend_key(uuid, backend_type), expire_seconds)
+        pipeline.hset(core_key, 'status', int(status))
+        pipeline.expire(core_key, expire_seconds)
+        pipeline.expire(backend_key, expire_seconds)
         pipeline.execute()
 
     def read(self, uuid: str) -> StoredSessionRecord | None:
         """Load session and backend metadata for a capture UUID, or None if absent."""
-        raw_core_metadata = self.redis.hgetall(self.core_key(uuid))
+        core_key = self.core_key(uuid)
+        raw_core_metadata = self.redis.hgetall(core_key)
         if not raw_core_metadata:
             return None
 
         core_metadata = self._decode_hash(raw_core_metadata)
-        backend_type = str(core_metadata.get('backend_type') or 'xpra')
-        core_metadata['backend_type'] = backend_type
+        if 'backend_type' not in core_metadata or not core_metadata.get('backend_type'):
+            raise InteractiveSessionError('No backend type in the metadata the session is invalid')
 
-        raw_backend_metadata = self.redis.hgetall(self.backend_key(uuid, backend_type))
+        backend_key = self.backend_key(uuid, core_metadata['backend_type'])
+        raw_backend_metadata = self.redis.hgetall(backend_key)
         backend_metadata = self._decode_hash(raw_backend_metadata) if raw_backend_metadata else {}
 
         return StoredSessionRecord(
@@ -102,62 +101,46 @@ class SessionMetadataStore:
             backend_metadata=backend_metadata,
         )
 
-    def request_finish(self, uuid: str) -> StoredSessionRecord | None:
-        """Atomically mark a session as ready for final capture via WATCH/MULTI."""
+    def request_finish(self, uuid: str) -> bool:
+        """Mark a session as ready for final capture."""
         core_key = self.core_key(uuid)
-        now_ts = int(time.time())
+        if self.redis.exists(core_key):
+            self.redis.hset(core_key, 'finish_requested', 1)
+            # NOTE: just in case, somehow, the key expires between exists and hset
+            self.redis.expire(core_key, 360)
+            return True
+        return False
 
-        with self.redis.pipeline() as pipeline:
-            while True:
-                try:
-                    pipeline.watch(core_key)
-                    # After watch(), hgetall executes immediately and returns
-                    # a dict rather than a Pipeline future.
-                    raw_core_metadata: dict[bytes, Any] = pipeline.hgetall(core_key)  # type: ignore[assignment]
-                    if not raw_core_metadata:
-                        pipeline.reset()
-                        return None
-
-                    core_metadata = self._decode_hash(raw_core_metadata)
-                    status_val = int(core_metadata.get('status', int(SessionStatus.UNKNOWN)))
-                    if status_val in (int(SessionStatus.STOPPED), int(SessionStatus.EXPIRED), int(SessionStatus.ERROR)):
-                        pipeline.unwatch()
-                        return self.read(uuid)
-
-                    requested_at = int(core_metadata.get(self.finish_key, 0) or 0)
-                    if requested_at:
-                        pipeline.unwatch()
-                        return self.read(uuid)
-
-                    pipeline.multi()
-                    pipeline.hset(core_key, mapping={self.finish_key: now_ts})
-                    pipeline.execute()
-                    return self.read(uuid)
-                except WatchError:
-                    continue
-
-    # TODO: keep a list of all the sessions (zset, score=start time)
-    # so we can a set and not the whole key space
-
-    def scan_expired(self, now_ts: int) -> list[tuple[str, StoredSessionRecord]]:
+    def scan_expired(self) -> list[tuple[str, StoredSessionRecord]]:
         """Return all non-terminal sessions whose expires_at is in the past."""
         expired_sessions: list[tuple[str, StoredSessionRecord]] = []
-        for key in self.redis.scan_iter('lacus:session:*'):
-            key_str = key.decode() if isinstance(key, bytes) else str(key)
-            if key_str.count(':') != 2:
-                continue
-
-            uuid = key_str.rsplit(':', 1)[-1]
-            record = self.read(uuid)
+        now_ts = datetime.now().timestamp()
+        old_uuids = []
+        for uuid, start_ts in self.redis.zscan_iter('lacus:interactive_session'):
+            # make sure we don't have a uuid older than 1h in there
+            if (datetime.fromtimestamp(start_ts) + timedelta(hours=1)).timestamp() < now_ts:
+                old_uuids.append(uuid)
+            record = self.read(uuid.decode())
             if not record:
+                # no metadata available
+                old_uuids.append(uuid)
                 continue
 
             status_val = int(record.metadata.get('status', int(SessionStatus.UNKNOWN)))
             if status_val in (int(SessionStatus.STOPPED), int(SessionStatus.EXPIRED), int(SessionStatus.ERROR)):
+                # if that value is set, the session was already stoped.
+                continue
+
+            if uuid in old_uuids:
+                expired_sessions.append((uuid.decode(), record))
                 continue
 
             expires_at_ts = int(record.metadata.get('expires_at', 0) or 0)
             if expires_at_ts and expires_at_ts <= now_ts:
-                expired_sessions.append((uuid, record))
+                expired_sessions.append((uuid.decode(), record))
+                old_uuids.append(uuid)
+
+        if old_uuids:
+            self.redis.zrem('lacus:interactive_session', *old_uuids)
 
         return expired_sessions

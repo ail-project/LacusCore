@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
+import logging
+import os
+import select
+import subprocess
 import sys
+import time
 
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import logging
-import os
 from pathlib import Path
-import select
-import subprocess
 from tempfile import gettempdir
-import time
-from typing import Any
 
+from redis import Redis
 
-from .session import Session
+from .helpers import SessionStatus, SessionMetadata
+from .session import Session, SessionManager
+from .session_store import SessionMetadataStore
 
 if sys.version_info >= (3, 11):
     from datetime import UTC
@@ -44,7 +46,7 @@ class XpraSession(Session):
             self.socket_path = Path(self.socket_path)
 
 
-class XpraSessionManager:
+class XpraSessionManager(SessionManager):
     """Manage xpra-based interactive browser sessions over per-session unix sockets.
 
     Each interactive session starts its own xpra server bound to a local unix
@@ -68,7 +70,7 @@ class XpraSessionManager:
         'XDG_RUNTIME_DIR',
     )
 
-    def __init__(self, xpra_command: str='xpra',
+    def __init__(self, redis: Redis[bytes], *, xpra_command: str='xpra',
                  socket_dir: str | Path | None=None) -> None:
         """Initialize an xpra session manager.
 
@@ -76,6 +78,8 @@ class XpraSessionManager:
         overridden by passing an explicit path. ``socket_dir`` defaults to a
         private runtime directory and can be overridden explicitly.
         """
+
+        # NOTE: at this stage, we never pass xpra_command and socket_dir
         self.xpra_command = xpra_command
 
         if socket_dir is None:
@@ -86,6 +90,8 @@ class XpraSessionManager:
                 socket_dir = Path(gettempdir()) / 'lacus-xpra'
         self.socket_dir = Path(socket_dir)
         self.socket_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+        self.session_store = SessionMetadataStore(redis)
 
     def _build_clean_env(self, extra_env: Mapping[str, str] | None=None) -> dict[str, str]:
         env = {
@@ -151,7 +157,7 @@ class XpraSessionManager:
             logger.warning('xpra stop %s failed: %s', target, e)
             return None
 
-    def start_session(self, *, session_name: str, ttl: int) -> XpraSession:
+    def start_session(self, *, session_name: str, ttl: int) -> tuple[XpraSession, SessionMetadata, dict[str, str]]:
         """Start an xpra session with the given name and allocate a display dynamically.
 
         :param session_name: Unique name for the interactive session (e.g. UUID).
@@ -277,28 +283,40 @@ class XpraSessionManager:
                 logger.error("xpra did not create socket %s in time. Command: %s", socket_path, cmd)
             raise RuntimeError(msg)
 
-        return XpraSession(
+        session = XpraSession(
             created_at=created_at,
             expires_at=expires_at,
             display=display,
             socket_path=socket_path,
         )
 
-    def serialize_backend_metadata(self, session: Session) -> Mapping[str, Any]:
+        metadata: SessionMetadata = {
+            'status': int(SessionStatus.STARTING),
+            'backend_type': self.backend_type,
+            'created_at': int(session.created_at.timestamp()),
+            'expires_at': int(session.expires_at.timestamp()),
+        }
+
+        backend_metadata = self.serialize_backend_metadata(session)
+        self.session_store.write(session_name, metadata, backend_metadata, expire_seconds=3600)
+
+        return session, metadata, backend_metadata
+
+    def serialize_backend_metadata(self, session: Session) -> dict[str, str]:
         if not isinstance(session, XpraSession):
             raise TypeError(f'Expected XpraSession, got {type(session)!r}')
         return {
             'display': session.display,
-            'socket_path': session.socket_path,
+            'socket_path': str(session.socket_path),
         }
 
     def restore_session(self, *, created_at: datetime, expires_at: datetime,
-                        backend_metadata: Mapping[str, Any]) -> XpraSession:
+                        backend_metadata: Mapping[str, str]) -> XpraSession:
         return XpraSession(
             created_at=created_at,
             expires_at=expires_at,
             display=backend_metadata.get('display', ''),
-            socket_path=backend_metadata.get('socket_path', ''),
+            socket_path=Path(backend_metadata.get('socket_path', '')),
         )
 
     def get_capture_env(self, session: Session) -> Mapping[str, str | float | bool]:
@@ -307,7 +325,8 @@ class XpraSessionManager:
             raise TypeError(f'Expected XpraSession, got {type(session)!r}')
         return {'DISPLAY': session.display}
 
-    def stop_session(self, session: Session) -> bool:
+    def stop_session(self, session: Session, uuid: str, metadata: SessionMetadata,
+                     *, status: SessionStatus, expire_seconds: int) -> bool:
         """Terminate a running xpra backend session.
 
         The implementation delegates to the ``xpra stop`` command,
@@ -323,6 +342,8 @@ class XpraSessionManager:
         """
         if not isinstance(session, XpraSession):
             raise TypeError(f'Expected XpraSession, got {type(session)!r}')
+
+        self.session_store.mark_terminal(uuid, metadata, status=status, expire_seconds=expire_seconds)
 
         socket_target = f'socket://{session.socket_path}'
         stop_targets = [socket_target]
@@ -360,3 +381,34 @@ class XpraSessionManager:
                            target, session.socket_path)
 
         return False
+
+    def cleanup_expired_sessions(self) -> None:
+        """Stop interactive sessions whose TTL has expired.
+
+        This method scans all interactive session metadata keys and, for any
+        session whose ``expires_at`` is in the past and whose status is not
+        already terminal ("stopped" or "expired"), stops the underlying xpra
+        process and marks the status as "expired".
+
+        It is designed to be called periodically by an external scheduler.
+        """
+
+        for uuid, record in self.session_store.scan_expired():
+            metadata = record.metadata
+            created_at_ts = 0
+            expires_at_ts = 0
+            try:
+                created_at_ts = int(metadata.get('created_at', 0)) if metadata.get('created_at') is not None else 0
+                expires_at_ts = int(metadata.get('expires_at', 0)) if metadata.get('expires_at') is not None else 0
+            except (TypeError, ValueError):
+                pass
+            session = self.restore_session(
+                created_at=datetime.fromtimestamp(created_at_ts, UTC),
+                expires_at=datetime.fromtimestamp(expires_at_ts, UTC),
+                backend_metadata=record.backend_metadata,
+            )
+
+            try:
+                self.stop_session(session, uuid, metadata, status=SessionStatus.EXPIRED, expire_seconds=60)
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning(f'Unable to expire interactive session {uuid}: {e}')

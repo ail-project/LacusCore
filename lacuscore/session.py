@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
+from .helpers import SessionMetadata, SessionStatus
+from .session_store import SessionMetadataStore
+
 
 @dataclass
 class Session:
@@ -30,19 +33,24 @@ class SessionManager(Protocol):
     """
 
     backend_type: str
+    session_store: SessionMetadataStore
 
-    def start_session(self, *, ttl: int, **kwargs: object) -> Session:  # pragma: no cover - structural contract
+    def start_session(self, *, session_name: str, ttl: int) -> tuple[Session, SessionMetadata, dict[str, str]]:  # pragma: no cover - structural contract
         ...
 
-    def stop_session(self, session: Session) -> bool:  # pragma: no cover - structural contract
+    def stop_session(self, session: Session, uuid: str, metadata: SessionMetadata,
+                     *, status: SessionStatus, expire_seconds: int) -> bool:  # pragma: no cover - structural contract
         ...
 
-    def serialize_backend_metadata(self, session: Session) -> Mapping[str, Any]:  # pragma: no cover - structural contract
+    def serialize_backend_metadata(self, session: Session) -> dict[str, Any]:  # pragma: no cover - structural contract
         ...
 
     def restore_session(self, *, created_at: datetime, expires_at: datetime,
-                        view_url: str | None, backend_metadata: Mapping[str, Any]) -> Session:  # pragma: no cover - structural contract
+                        backend_metadata: Mapping[str, str]) -> Session:  # pragma: no cover - structural contract
         ...
 
     def get_capture_env(self, session: Session) -> Mapping[str, str | float | bool]:  # pragma: no cover - structural contract
+        ...
+
+    def cleanup_expired_sessions(self) -> None:
         ...
