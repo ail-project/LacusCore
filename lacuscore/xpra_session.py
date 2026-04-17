@@ -402,11 +402,19 @@ class XpraSessionManager(SessionManager):
                 expires_at_ts = int(metadata.get('expires_at', 0)) if metadata.get('expires_at') is not None else 0
             except (TypeError, ValueError):
                 pass
-            session = self.restore_session(
-                created_at=datetime.fromtimestamp(created_at_ts, UTC),
-                expires_at=datetime.fromtimestamp(expires_at_ts, UTC),
-                backend_metadata=record.backend_metadata,
-            )
+
+            if sys.version_info >= (3, 11):
+                session = self.restore_session(
+                    created_at=datetime.fromtimestamp(created_at_ts, UTC),
+                    expires_at=datetime.fromtimestamp(expires_at_ts, UTC),
+                    backend_metadata=record.backend_metadata,
+                )
+            else:
+                session = self.restore_session(
+                    created_at=datetime.utcfromtimestamp(created_at_ts),
+                    expires_at=datetime.utcfromtimestamp(expires_at_ts),
+                    backend_metadata=record.backend_metadata,
+                )
 
             try:
                 self.stop_session(session, uuid, metadata, status=SessionStatus.EXPIRED, expire_seconds=60)
