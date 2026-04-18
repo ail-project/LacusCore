@@ -1,6 +1,6 @@
 [project]
 name = "lacuscore"
-version = "1.24.2"
+version = "1.24.3"
 description = "Core of Lacus, usable as a module"
 authors = [
     {name="Raphaël Vinot", email="raphael.vinot@circl.lu"}
@@ -20,7 +20,7 @@ dependencies = [
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
     "pydantic (>=2.13.2)",
     "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\"",
-    "lookyloo-models (>=0.2.1)"
+    "lookyloo-models (>=0.2.2)"
 ]
 
 [project.urls]
