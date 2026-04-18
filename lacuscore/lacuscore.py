@@ -522,6 +522,9 @@ class LacusCore():
                 except PlaywrightCaptureException as e:
                     logger.warning(f'[RemoteHeaded] Unrecoverable exception during capture: {e}')
                     raise CaptureError(f'[RemoteHeaded] Unrecoverable exception during capture: {e}')
+                except Exception as e:
+                    logger.warning(f'[RemoteHeaded] Totally unrecoverable exception during capture: {e}')
+                    raise CaptureError(f'[RemoteHeaded] Totally unrecoverable exception during capture: {e}')
 
                 result = cast(CaptureResponse, playwright_result)
                 status = SessionStatus.STOPPED
@@ -574,7 +577,6 @@ class LacusCore():
                     capture_settings=to_capture,
                     tt_settings=self.tt_settings) as capture:
                 await self._initialize_capture_context(capture, logger, url)
-
                 try:
                     async with timeout(self.max_capture_time) as capture_timeout:
                         playwright_result = await capture.capture_page(
@@ -594,7 +596,9 @@ class LacusCore():
                 except PlaywrightCaptureException as e:
                     logger.warning(f'Unrecoverable exception during capture: {e}')
                     raise CaptureError(f'Unrecoverable exception during capture: {e}')
-
+                except Exception as e:
+                    logger.warning(f'Totally unrecoverable exception during capture: {e}')
+                    raise CaptureError(f'Totally unrecoverable exception during capture: {e}')
                 result = cast(CaptureResponse, playwright_result)
                 if 'error' in result and 'error_name' in result:
                     # generate stats
@@ -603,6 +607,7 @@ class LacusCore():
                 should_retry = capture.should_retry
                 return result, should_retry
         except RetryCapture as e:
+            logger.info('Attempting to retry.')
             raise e
         except (PlaywrightCaptureException, InvalidPlaywrightParameter) as e:
             logger.warning(f'Invalid parameters for the capture of {url} - {e}')
