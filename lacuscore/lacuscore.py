@@ -32,7 +32,8 @@ from dns.exception import Timeout as DNSTimeout
 from lookyloo_models import (CaptureSettingsError, CaptureSettings, ViewportSettings,
                              GeolocationSettings, HttpCredentialsSettings,
                              Cookie)
-from playwrightcapture import Capture, PlaywrightCaptureException, InvalidPlaywrightParameter, TrustedTimestampSettings
+from playwrightcapture import (Capture, PlaywrightCaptureException, InvalidPlaywrightParameter,
+                               TrustedTimestampSettings, get_devices)
 from pydantic import ValidationError
 from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -676,7 +677,6 @@ class LacusCore():
             except ValidationError as e:
                 logger.warning(f'Settings invalid: {e}')
                 raise CaptureSettingsError('Invalid settings', e)
-
             # NOTE: never retry remote headfull captures
             if to_capture.remote_headfull:
                 max_retries = 0
@@ -1064,6 +1064,21 @@ class LacusCore():
                 logger.debug(f'No AAAA record for "{hostname}": {e}')
             break
         return resolved_ips
+
+    def playwright_devices(self) -> dict[str, Any]:
+        """Get the devices exposed by Playwright"""
+        # Having this method there allows to remove the direct dependency on playwright for Lookyloo
+        return get_devices()
+
+    def settings(self) -> dict[str, str | bool | int]:
+        """The public settings for the instance"""
+        return {
+            "headed_allowed": self.headed_allowed,
+            "remote_headed_allowed": self.remote_headed_allowed,
+            "trusted_timestamps_default": bool(self.tt_settings),
+            "i2p_enabled": bool(self.i2p_proxy),
+            "tor_enabled": bool(self.tor_proxy),
+        }
 
     def request_finish(self, uuid: str) -> bool:
         """Mark a remote headfull session as ready for final capture.
