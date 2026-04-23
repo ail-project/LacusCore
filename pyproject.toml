@@ -20,7 +20,7 @@ dependencies = [
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
     "pydantic (>=2.13.3)",
     "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\"",
-    "lookyloo-models (>=0.2.2)"
+    "lookyloo-models (>=0.2.3)"
 ]
 
 [project.urls]
