@@ -25,9 +25,6 @@ if sys.version_info >= (3, 11):
     from datetime import UTC
 
 
-logger = logging.getLogger(__name__)
-
-
 @dataclass
 class XpraSession(Session):
     """Representation of a single xpra-backed remote headed session.
@@ -70,24 +67,22 @@ class XpraSessionManager(SessionManager):
         'XDG_RUNTIME_DIR',
     )
 
-    def __init__(self, redis: Redis[bytes], *, xpra_command: str='xpra',
-                 socket_dir: str | Path | None=None) -> None:
+    def __init__(self, redis: Redis[bytes], *, loglevel: str | int='INFO') -> None:
         """Initialize an xpra session manager.
 
         ``xpra_command`` defaults to the ``xpra`` binary on PATH and can be
         overridden by passing an explicit path. ``socket_dir`` defaults to a
         private runtime directory and can be overridden explicitly.
         """
+        self.master_logger = logging.getLogger(f'{self.__class__.__name__}')
+        self.master_logger.setLevel(loglevel)
 
-        # NOTE: at this stage, we never pass xpra_command and socket_dir
-        self.xpra_command = xpra_command
+        self.xpra_command = 'xpra'
 
-        if socket_dir is None:
-            runtime_dir = os.getenv('XDG_RUNTIME_DIR')
-            if runtime_dir:
-                socket_dir = Path(runtime_dir) / 'lacus-xpra'
-            else:
-                socket_dir = Path(gettempdir()) / 'lacus-xpra'
+        if runtime_dir := os.getenv('XDG_RUNTIME_DIR'):
+            socket_dir = Path(runtime_dir) / 'lacus-xpra'
+        else:
+            socket_dir = Path(gettempdir()) / 'lacus-xpra'
         self.socket_dir = Path(socket_dir)
         self.socket_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
@@ -114,7 +109,7 @@ class XpraSessionManager(SessionManager):
         try:
             socket_path.unlink(missing_ok=True)
         except Exception as e:
-            logger.warning('Unable to remove xpra socket %s: %s', socket_path, e)
+            self.master_logger.warning('Unable to remove xpra socket %s: %s', socket_path, e)
 
     def _wait_for_socket_removal(self, socket_path: Path, *, timeout: float=10.0) -> bool:
         deadline = time.monotonic() + timeout
@@ -148,13 +143,13 @@ class XpraSessionManager(SessionManager):
                 env=self._build_clean_env(),
             )
         except FileNotFoundError as e:
-            logger.warning('xpra command not found while stopping %s: %s', target, e)
+            self.master_logger.warning('xpra command not found while stopping %s: %s', target, e)
             return None
         except subprocess.TimeoutExpired:
-            logger.warning('xpra stop %s timed out.', target)
+            self.master_logger.warning('xpra stop %s timed out.', target)
             return None
         except Exception as e:
-            logger.warning('xpra stop %s failed: %s', target, e)
+            self.master_logger.warning('xpra stop %s failed: %s', target, e)
             return None
 
     def start_session(self, *, session_name: str, ttl: int) -> tuple[XpraSession, SessionMetadata, dict[str, str]]:
@@ -177,7 +172,7 @@ class XpraSessionManager(SessionManager):
         socket_path = self.socket_dir / f'{session_name}.sock'
         if socket_path.exists():
             # NOTE: if the socket exists, we probably want to stop the session
-            socket_path.unlink()
+            self._cleanup_socket_path(socket_path)
 
         cmd = [
             self.xpra_command,
@@ -211,7 +206,7 @@ class XpraSessionManager(SessionManager):
             os.close(write_fd)
             os.close(read_fd)
             msg = f"xpra command not found: {self.xpra_command} ({e})"
-            logger.error(msg)
+            self.master_logger.error(msg)
             raise RuntimeError(msg) from e
 
         os.close(write_fd)
@@ -250,17 +245,17 @@ class XpraSessionManager(SessionManager):
             if stderr_output:
                 # Log the full stderr but only attach the tail to the
                 # exception message to keep it concise.
-                logger.error("xpra failed to start. Command: %s; stderr: %s", cmd, stderr_output)
+                self.master_logger.error("xpra failed to start. Command: %s; stderr: %s", cmd, stderr_output)
                 last_line = stderr_output.strip().splitlines()[-1]
                 msg = f"{msg}: {last_line}"
             else:
-                logger.error("xpra failed to start. Command: %s; no stderr output.", cmd)
+                self.master_logger.error("xpra failed to start. Command: %s; no stderr output.", cmd)
 
             raise RuntimeError(msg)
 
         display_num = display_bytes.decode('utf-8').strip()
         if not display_num:
-            logger.error("xpra returned empty display string. Command: %s", cmd)
+            self.master_logger.error("xpra returned empty display string. Command: %s", cmd)
             raise RuntimeError("Failed to read allocated display from xpra")
 
         display = f":{display_num}"
@@ -276,11 +271,11 @@ class XpraSessionManager(SessionManager):
 
             msg = f'xpra did not create its unix socket at {socket_path} within 10 s'
             if stderr_output:
-                logger.error("xpra failed to create socket. Command: %s; stderr: %s", cmd, stderr_output)
+                self.master_logger.error("xpra failed to create socket. Command: %s; stderr: %s", cmd, stderr_output)
                 last_line = stderr_output.strip().splitlines()[-1]
                 msg = f'{msg}: {last_line}'
             else:
-                logger.error("xpra did not create socket %s in time. Command: %s", socket_path, cmd)
+                self.master_logger.error("xpra did not create socket %s in time. Command: %s", socket_path, cmd)
             raise RuntimeError(msg)
 
         session = XpraSession(
@@ -366,7 +361,7 @@ class XpraSessionManager(SessionManager):
             success = completed.returncode == 0 or already_stopped
 
             if not success:
-                logger.warning('xpra stop %s failed with code %s: %s', target, completed.returncode, output.strip())
+                self.master_logger.warning('xpra stop %s failed with code %s: %s', target, completed.returncode, output.strip())
                 continue
 
             if already_stopped:
@@ -377,8 +372,8 @@ class XpraSessionManager(SessionManager):
                 self._cleanup_socket_path(session.socket_path)
                 return True
 
-            logger.warning('xpra stop %s succeeded but socket %s is still present after waiting.',
-                           target, session.socket_path)
+            self.master_logger.warning('xpra stop %s succeeded but socket %s is still present after waiting.',
+                                       target, session.socket_path)
 
         return False
 
@@ -419,4 +414,4 @@ class XpraSessionManager(SessionManager):
             try:
                 self.stop_session(session, uuid, metadata, status=SessionStatus.EXPIRED, expire_seconds=60)
             except Exception as e:  # pragma: no cover - defensive
-                logger.warning(f'Unable to expire remote headed session {uuid}: {e}')
+                self.master_logger.warning(f'Unable to expire remote headed session {uuid}: {e}')

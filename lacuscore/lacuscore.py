@@ -30,8 +30,7 @@ from dns.exception import DNSException
 from dns.exception import Timeout as DNSTimeout
 
 from lookyloo_models import (CaptureSettingsError, CaptureSettings, ViewportSettings,
-                             GeolocationSettings, HttpCredentialsSettings,
-                             Cookie)
+                             GeolocationSettings, HttpCredentialsSettings, Cookie)
 from playwrightcapture import (Capture, PlaywrightCaptureException, InvalidPlaywrightParameter,
                                TrustedTimestampSettings, get_devices)
 from pydantic import ValidationError
@@ -428,7 +427,7 @@ class LacusCore():
         if not backend_type:
             raise LacusCoreException('No backend type provided for the remote headed session.')
         if backend_type == XpraSessionManager.backend_type:
-            return XpraSessionManager(redis)
+            return XpraSessionManager(redis, loglevel=self.master_logger.getEffectiveLevel())
         raise LacusCoreException(f'Unknown remote headed session backend: {backend_type}')
 
     async def _initialize_capture_context(self, capture: Capture, logger: LacusCoreLogAdapter, url: str) -> None:
