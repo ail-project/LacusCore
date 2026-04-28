@@ -455,6 +455,7 @@ class LacusCore():
         session, metadata, backend_metadata = self.remote_headed_session_manager.start_session(session_name=uuid,
                                                                                                ttl=to_capture.general_timeout_in_sec if to_capture.general_timeout_in_sec is not None else 300)
 
+        status = SessionStatus.UNKNOWN
         try:
             # NOTE: that shouldn't be needed. at this point, the capture should for sure be headless.
             to_capture.headless = False
