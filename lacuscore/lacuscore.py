@@ -467,6 +467,7 @@ class LacusCore():
                     uuid=uuid,
                     capture_settings=to_capture,
                     tt_settings=self.tt_settings,
+                    only_global_lookup=self.only_global_lookups,
                     env=dict(self.remote_headed_session_manager.get_capture_env(session))) as capture:
                 await self._initialize_capture_context(capture, logger, url)
 
@@ -533,8 +534,7 @@ class LacusCore():
                     # generate stats
                     if result['error_name'] is not None:
                         stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
-                should_retry = capture.should_retry
-                return result, should_retry
+                return result, capture.should_retry
         except RetryCapture as e:
             raise e
         except RemoteHeadfullSessionError as e:
@@ -556,10 +556,13 @@ class LacusCore():
             logger.exception(f'[RemoteHeaded] Something went poorly {url} - {e}')
             raise CaptureError(f'[RemoteHeaded] Something went poorly {url} - {e}')
         finally:
-            self.remote_headed_session_manager.stop_session(session, uuid, metadata,
-                                                            status=status, expire_seconds=60)
-            # NOTE: maybe move that somewhere else
-            self.remote_headed_session_manager.cleanup_expired_sessions()
+            try:
+                self.remote_headed_session_manager.stop_session(session, uuid, metadata,
+                                                                status=status, expire_seconds=60)
+                # NOTE: maybe move that somewhere else
+                self.remote_headed_session_manager.cleanup_expired_sessions()
+            except Exception as e:
+                raise CaptureError(f'[RemoteHeaded] Unable to cleanly close the session: {e}.')
 
         raise CaptureError('[RemoteHeaded] Should never land there, but that capture failed badly.')
 
@@ -567,8 +570,6 @@ class LacusCore():
                                     url: str,
                                     logger: LacusCoreLogAdapter,
                                     stats_pipeline: Any, today: str) -> tuple[CaptureResponse, bool]:
-        should_retry = False
-
         try:
             logger.debug(f'Capturing {url}')
             stats_pipeline.sadd(f'stats:{today}:captures', url)
@@ -576,7 +577,8 @@ class LacusCore():
                     loglevel=self.master_logger.getEffectiveLevel(),
                     uuid=uuid,
                     capture_settings=to_capture,
-                    tt_settings=self.tt_settings) as capture:
+                    tt_settings=self.tt_settings,
+                    only_global_lookup=self.only_global_lookups) as capture:
                 await self._initialize_capture_context(capture, logger, url)
                 try:
                     async with timeout(self.max_capture_time) as capture_timeout:
@@ -605,8 +607,7 @@ class LacusCore():
                     # generate stats
                     if result['error_name'] is not None:
                         stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
-                should_retry = capture.should_retry
-                return result, should_retry
+                return result, capture.should_retry
         except RetryCapture as e:
             logger.info('Attempting to retry.')
             raise e
