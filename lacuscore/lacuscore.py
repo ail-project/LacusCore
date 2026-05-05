@@ -303,7 +303,7 @@ class LacusCore():
                 to_enqueue = CaptureSettings.model_validate(settings)
             except ValidationError as e:
                 self.master_logger.warning(f'Unable to validate settings: {e}.')
-                raise CaptureSettingsError('Invalid settings', e)
+                raise CaptureSettingsError('Invalid settings', e) from e
         else:
             to_enqueue = settings
 
@@ -338,9 +338,9 @@ class LacusCore():
         p.zadd('lacus:to_capture', {perma_uuid: priority if priority is not None else 0})
         try:
             p.execute()
-        except DataError:
+        except DataError as e:
             self.master_logger.exception(f'Unable to enqueue: {to_enqueue}')
-            raise CaptureSettingsError(f'Unable to enqueue: {to_enqueue}')
+            raise CaptureSettingsError(f'Unable to enqueue: {to_enqueue}') from e
         return perma_uuid
 
     def _encode_response(self, capture: CaptureResponse) -> CaptureResponseJson:
@@ -436,10 +436,10 @@ class LacusCore():
         try:
             async with timeout(init_timeout) as initialize_timeout:
                 await capture.initialize_context()
-        except (TimeoutError, asyncio.exceptions.TimeoutError):
+        except (TimeoutError, asyncio.exceptions.TimeoutError) as e:
             timeout_expired(initialize_timeout, logger, 'Initializing took too long.')
             logger.warning(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
-            raise RetryCapture(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)')
+            raise RetryCapture(f'Initializing the context for {url} took longer than the allowed initialization timeout ({init_timeout}s)') from e
 
     async def _run_remote_headfull_capture(self, *, uuid: str, to_capture: CaptureSettings, url: str,
                                            logger: LacusCoreLogAdapter,
@@ -517,16 +517,16 @@ class LacusCore():
                             with_favicon=to_capture.with_favicon,
                             with_trusted_timestamps=to_capture.with_trusted_timestamps,
                         )
-                except (TimeoutError, asyncio.exceptions.TimeoutError):
+                except (TimeoutError, asyncio.exceptions.TimeoutError) as e:
                     timeout_expired(capture_timeout, logger, 'Capture took too long.')
                     logger.warning(f'[RemoteHeaded] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
-                    raise RetryCapture(f'[RemoteHeaded] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+                    raise RetryCapture(f'[RemoteHeaded] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)') from e
                 except PlaywrightCaptureException as e:
                     logger.warning(f'[RemoteHeaded] Unrecoverable exception during capture: {e}')
-                    raise CaptureError(f'[RemoteHeaded] Unrecoverable exception during capture: {e}')
+                    raise CaptureError(f'[RemoteHeaded] Unrecoverable exception during capture: {e}') from e
                 except Exception as e:
                     logger.warning(f'[RemoteHeaded] Totally unrecoverable exception during capture: {e}')
-                    raise CaptureError(f'[RemoteHeaded] Totally unrecoverable exception during capture: {e}')
+                    raise CaptureError(f'[RemoteHeaded] Totally unrecoverable exception during capture: {e}') from e
 
                 result = cast(CaptureResponse, playwright_result)
                 status = SessionStatus.STOPPED
@@ -535,26 +535,26 @@ class LacusCore():
                     if result['error_name'] is not None:
                         stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
                 return result, capture.should_retry
-        except RetryCapture as e:
-            raise e
+        except RetryCapture:
+            raise
         except RemoteHeadfullSessionError as e:
             logger.warning(f'[RemoteHeaded] Unable to complete session: {e}')
             status = SessionStatus.ERROR
-            raise CaptureError(f'[RemoteHeaded] Unable to complete remote headed session: {e}')
+            raise CaptureError(f'[RemoteHeaded] Unable to complete remote headed session: {e}') from e
         except (PlaywrightCaptureException, InvalidPlaywrightParameter) as e:
             status = SessionStatus.ERROR
             logger.warning(f'[RemoteHeaded] Invalid parameters for the capture of {url} - {e}')
-            raise CaptureError(f'[RemoteHeaded] Invalid parameters for the capture of {url} - {e}')
-        except asyncio.CancelledError:
+            raise CaptureError(f'[RemoteHeaded] Invalid parameters for the capture of {url} - {e}') from e
+        except asyncio.CancelledError as e:
             status = SessionStatus.ERROR
             logger.warning(f'[RemoteHeaded] The capture of {url} has been cancelled.')
             # The capture can be canceled if it has been running for way too long.
             # We can give it another short.
-            raise RetryCapture(f'[RemoteHeaded]  The capture of {url} has been cancelled.')
+            raise RetryCapture(f'[RemoteHeaded] The capture of {url} has been cancelled.') from e
         except Exception as e:
             status = SessionStatus.ERROR
             logger.exception(f'[RemoteHeaded] Something went poorly {url} - {e}')
-            raise CaptureError(f'[RemoteHeaded] Something went poorly {url} - {e}')
+            raise CaptureError(f'[RemoteHeaded] Something went poorly {url} - {e}') from e
         finally:
             try:
                 self.remote_headed_session_manager.stop_session(session, uuid, metadata,
@@ -562,7 +562,7 @@ class LacusCore():
                 # NOTE: maybe move that somewhere else
                 self.remote_headed_session_manager.cleanup_expired_sessions()
             except Exception as e:
-                raise CaptureError(f'[RemoteHeaded] Unable to cleanly close the session: {e}.')
+                raise CaptureError(f'[RemoteHeaded] Unable to cleanly close the session: {e}.') from e
 
         raise CaptureError('[RemoteHeaded] Should never land there, but that capture failed badly.')
 
@@ -592,36 +592,36 @@ class LacusCore():
                             with_trusted_timestamps=to_capture.with_trusted_timestamps,
                             max_depth_capture_time=self.max_capture_time,
                             final_wait=to_capture.final_wait)
-                except (TimeoutError, asyncio.exceptions.TimeoutError):
+                except (TimeoutError, asyncio.exceptions.TimeoutError) as e:
                     timeout_expired(capture_timeout, logger, 'Capture took too long.')
                     logger.warning(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
-                    raise RetryCapture(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
+                    raise RetryCapture(f'The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)') from e
                 except PlaywrightCaptureException as e:
                     logger.warning(f'Unrecoverable exception during capture: {e}')
-                    raise CaptureError(f'Unrecoverable exception during capture: {e}')
+                    raise CaptureError(f'Unrecoverable exception during capture: {e}') from e
                 except Exception as e:
                     logger.warning(f'Totally unrecoverable exception during capture: {e}')
-                    raise CaptureError(f'Totally unrecoverable exception during capture: {e}')
+                    raise CaptureError(f'Totally unrecoverable exception during capture: {e}') from e
                 result = cast(CaptureResponse, playwright_result)
                 if 'error' in result and 'error_name' in result:
                     # generate stats
                     if result['error_name'] is not None:
                         stats_pipeline.zincrby(f'stats:{today}:errors', 1, result['error_name'])
                 return result, capture.should_retry
-        except RetryCapture as e:
+        except RetryCapture:
             logger.info('Attempting to retry.')
-            raise e
+            raise
         except (PlaywrightCaptureException, InvalidPlaywrightParameter) as e:
             logger.warning(f'Invalid parameters for the capture of {url} - {e}')
-            raise CaptureError(f'Invalid parameters for the capture of {url} - {e}')
-        except asyncio.CancelledError:
+            raise CaptureError(f'Invalid parameters for the capture of {url} - {e}') from e
+        except asyncio.CancelledError as e:
             logger.warning(f'The capture of {url} has been cancelled.')
             # The capture can be canceled if it has been running for way too long.
             # We can give it another short.
-            raise RetryCapture(f'The capture of {url} has been cancelled.')
+            raise RetryCapture(f'The capture of {url} has been cancelled.') from e
         except Exception as e:
             logger.exception(f'Something went poorly {url} - {e}')
-            raise CaptureError(f'Something went poorly {url} - {e}')
+            raise CaptureError(f'Something went poorly {url} - {e}') from e
 
         raise CaptureError('Should never land there, but that capture failed badly.')
 
@@ -677,7 +677,7 @@ class LacusCore():
                 to_capture = CaptureSettings.model_validate(_to_capture)
             except ValidationError as e:
                 logger.warning(f'Settings invalid: {e}')
-                raise CaptureSettingsError('Invalid settings', e)
+                raise CaptureSettingsError('Invalid settings', e) from e
             # NOTE: never retry remote headfull captures
             if to_capture.remote_headfull:
                 max_retries = 0
@@ -706,7 +706,7 @@ class LacusCore():
                 splitted_url = urlsplit(url)
             except Exception as e:
                 result = {'error': f'Invalid URL: {url} - {e}'}
-                raise CaptureError(f'Invalid URL: {url} - {e}')
+                raise CaptureError(f'Invalid URL: {url} - {e}') from e
             if self.tor_proxy:
                 # check if onion or forced
                 if (to_capture.proxy == 'force_tor'  # if the proxy is set to "force_tor", we use the pre-configured tor proxy, regardless the URL, legacy feature.
@@ -746,10 +746,10 @@ class LacusCore():
                             except DNSTimeout as e:
                                 # for a timeout, we do not want to retry, as it is likely to timeout again
                                 result = {'error': f'DNS Timeout for "{splitted_url.hostname}": {e}'}
-                                raise CaptureError(f'DNS Timeout for "{splitted_url.hostname}": {e}')
+                                raise CaptureError(f'DNS Timeout for "{splitted_url.hostname}": {e}') from e
                             except Exception as e:
                                 result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".'}
-                                raise CaptureError(f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".')
+                                raise CaptureError(f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".') from e
                         if not ips_to_check:
                             logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
                             result = {'error': f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".'}
@@ -1039,12 +1039,12 @@ class LacusCore():
             try:
                 answers_a = await self.dnsresolver.resolve(hostname, 'A')
                 resolved_ips += [ip_address(str(answer)) for answer in answers_a]
-            except DNSTimeout as e:
+            except DNSTimeout:
                 if _current_retries < max_timeout_retries:
                     logger.info(f'DNS Timeout for "{hostname}" (A record), retrying.')
                     await asyncio.sleep(1)
                     continue
-                raise e
+                raise
             except DNSException as e:
                 logger.debug(f'No A record for "{hostname}": {e}')
             break
@@ -1055,12 +1055,12 @@ class LacusCore():
             try:
                 answers_aaaa = await self.dnsresolver.resolve(hostname, 'AAAA')
                 resolved_ips += [ip_address(str(answer)) for answer in answers_aaaa]
-            except DNSTimeout as e:
+            except DNSTimeout:
                 if _current_retries < max_timeout_retries:
                     logger.info(f'DNS Timeout for "{hostname}" (AAAA record), retrying.')
                     await asyncio.sleep(1)
                     continue
-                raise e
+                raise
             except DNSException as e:
                 logger.debug(f'No AAAA record for "{hostname}": {e}')
             break
