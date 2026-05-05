@@ -24,7 +24,7 @@ def create_task(
     message_args: tuple[Any, ...] = (),
     loop: asyncio.AbstractEventLoop | None = None,
 
-) -> asyncio.Task[T]:  # This type annotation has to be quoted for Python < 3.9, see https://www.python.org/dev/peps/pep-0585/
+) -> asyncio.Task[T]:
     '''
     This helper function wraps a ``loop.create_task(coroutine())`` call and ensures there is
     an exception handler added to the resulting task. If the task raises an exception it is logged
