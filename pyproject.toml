@@ -14,7 +14,7 @@ requires-python = ">=3.10,<3.15"
 dynamic = [ "classifiers" ]
 
 dependencies = [
-    "playwrightcapture[recaptcha] (>=1.39.8)",
+    "playwrightcapture[recaptcha] (>=1.39.12)",
     "redis[hiredis] (>=5.3.0,<6.0.0)",
     "dnspython (>=2.8.0)",
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
@@ -44,9 +44,9 @@ classifiers = [
 docs = ["Sphinx (>=9.1.0) ; python_version >= \"3.12\""]
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^2.0.0"
+mypy = "^2.1.0"
 types-redis = {version = "^4.6.0.20241004"}
-types-requests = "^2.33.0.20260508"
+types-requests = "^2.33.0.20260518"
 types-beautifulsoup4 = "^4.12.0.20250516"
 pytest = "^9.0.3"
 
