@@ -446,8 +446,6 @@ class LacusCore():
                                            stats_pipeline: Any, today: str) -> tuple[CaptureResponse, bool]:
         if not self.remote_headed_allowed or not self.remote_headed_session_manager:
             raise CaptureError('Remote Headfull captures are disabled by configuration.')
-        if not self.headed_allowed:
-            raise CaptureError('Remote Headfull captures require headed_allowed=True.')
 
         result: CaptureResponse = {}
         errors: list[str] = []
