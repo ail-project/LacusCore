@@ -291,6 +291,7 @@ class LacusCore():
                         'with_screenshot': with_screenshot, 'with_favicon': with_favicon,
                         'with_trusted_timestamps': with_trusted_timestamps,
                         'allow_tracking': allow_tracking,
+                        'uuid': uuid,
                         # Quietly force it to false if remote headed is not allowed.
                         'remote_headfull': remote_headfull if self.remote_headed_allowed else False,
                         'final_wait': final_wait,
