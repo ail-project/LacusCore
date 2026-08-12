@@ -472,7 +472,13 @@ class LacusCore():
 
                 # prepare and open the page the user will interact with.
                 page = await capture.setup_page_capture(allow_tracking=to_capture.allow_tracking)
-                await capture.open_page(page, url, errors, to_capture.referer)
+                try:
+                    await capture.open_page(page, url, errors, to_capture.referer)
+                except Exception as e:
+                    if hasattr(e, 'name'):
+                        raise PlaywrightCaptureException(f'Unable to open page: {e.name}')
+                    else:
+                        raise PlaywrightCaptureException(f'Unable to open page: {e}')
 
                 status = SessionStatus.READY
                 metadata['status'] = int(status)
@@ -502,7 +508,6 @@ class LacusCore():
                     else:
                         # This shouldn't happen, but just in case (the metadata should exist)
                         status = SessionStatus.ERROR
-                        result['error'] = 'Missing metadata, cannot finish capture'
                         raise RemoteHeadfullSessionError('Unable to process capture, missing metadata')
 
                 try:
@@ -521,12 +526,10 @@ class LacusCore():
                     logger.warning(f'[RemoteHeaded] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)')
                     raise RetryCapture(f'[RemoteHeaded] The capture of {url} took longer than the allowed max capture time ({self.max_capture_time}s)') from e
                 except PlaywrightCaptureException as e:
-                    logger.warning(f'[RemoteHeaded] Unrecoverable exception during capture: {e}')
                     raise CaptureError(f'[RemoteHeaded] Unrecoverable exception during capture: {e}') from e
                 except Exception as e:
                     logger.warning(f'[RemoteHeaded] Totally unrecoverable exception during capture: {e}')
                     raise CaptureError(f'[RemoteHeaded] Totally unrecoverable exception during capture: {e}') from e
-
                 result = cast(CaptureResponse, playwright_result)
                 status = SessionStatus.STOPPED
                 if 'error' in result and 'error_name' in result:
@@ -540,10 +543,13 @@ class LacusCore():
             logger.warning(f'[RemoteHeaded] Unable to complete session: {e}')
             status = SessionStatus.ERROR
             raise CaptureError(f'[RemoteHeaded] Unable to complete remote headed session: {e}') from e
-        except (PlaywrightCaptureException, InvalidPlaywrightParameter) as e:
+        except InvalidPlaywrightParameter as e:
             status = SessionStatus.ERROR
             logger.warning(f'[RemoteHeaded] Invalid parameters for the capture of {url} - {e}')
             raise CaptureError(f'[RemoteHeaded] Invalid parameters for the capture of {url} - {e}') from e
+        except PlaywrightCaptureException as e:
+            status = SessionStatus.ERROR
+            raise CaptureError(f'[RemoteHeaded] Error while capturing {url} - {e}') from e
         except asyncio.CancelledError as e:
             status = SessionStatus.ERROR
             logger.warning(f'[RemoteHeaded] The capture of {url} has been cancelled.')
@@ -563,7 +569,7 @@ class LacusCore():
             except Exception as e:
                 raise CaptureError(f'[RemoteHeaded] Unable to cleanly close the session: {e}.') from e
 
-        raise CaptureError('[RemoteHeaded] Should never land there, but that capture failed badly.')
+        raise CaptureError(f'[RemoteHeaded] Should never land there, but that capture failed badly: {to_capture}')
 
     async def _run_standard_capture(self, *, uuid: str, to_capture: CaptureSettings,
                                     url: str,
@@ -668,7 +674,6 @@ class LacusCore():
             _to_capture_b = self.redis.hgetall(f'lacus:capture_settings:{uuid}')
 
             if not _to_capture_b:
-                result = {'error': f'No capture settings for {uuid}'}
                 raise CaptureError(f'No capture settings for {uuid}')
 
             _to_capture = {k.decode(): v.decode() for k, v in _to_capture_b.items()}
@@ -694,17 +699,14 @@ class LacusCore():
                 url = f'file://{tmp_f.name}'
             elif to_capture.url:
                 if to_capture.url.lower().startswith('file:') and self.only_global_lookups:
-                    result = {'error': f'Not allowed to capture a file on disk: {url}'}
                     raise CaptureError(f'Not allowed to capture a file on disk: {url}')
                 url = to_capture.url
             else:
-                result = {'error': f'No valid URL to capture for {uuid} - {to_capture}'}
                 raise CaptureError(f'No valid URL to capture for {uuid} - {to_capture}')
 
             try:
                 splitted_url = urlsplit(url)
             except Exception as e:
-                result = {'error': f'Invalid URL: {url} - {e}'}
                 raise CaptureError(f'Invalid URL: {url} - {e}') from e
             if self.tor_proxy:
                 # check if onion or forced
@@ -744,21 +746,16 @@ class LacusCore():
                                 ips_to_check = await self.__get_ips(logger, splitted_url.hostname)
                             except DNSTimeout as e:
                                 # for a timeout, we do not want to retry, as it is likely to timeout again
-                                result = {'error': f'DNS Timeout for "{splitted_url.hostname}": {e}'}
                                 raise CaptureError(f'DNS Timeout for "{splitted_url.hostname}": {e}') from e
                             except Exception as e:
-                                result = {'error': f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".'}
                                 raise CaptureError(f'Issue with hostname resolution ({splitted_url.hostname}): {e}. Full URL: "{url}".') from e
                         if not ips_to_check:
                             logger.debug(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
-                            result = {'error': f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".'}
                             raise RetryCapture(f'Unable to resolve "{splitted_url.hostname}" - Full URL: "{url}".')
                         for ip in ips_to_check:
                             if not ip.is_global:
-                                result = {'error': f'Capturing ressources on private IPs ({ip}) is disabled.'}
                                 raise CaptureError(f'Capturing ressources on private IPs ({ip}) is disabled.')
                 else:
-                    result = {'error': f'Unable to find hostname or IP in the query: "{url}".'}
                     raise CaptureError(f'Unable to find hostname or IP in the query: "{url}".')
 
             if to_capture.remote_headfull:
@@ -817,11 +814,7 @@ class LacusCore():
         except CaptureError as e:
             if not result:
                 result = {'error': str(e) if str(e) else "No result key, shouldn't happen"}
-                logger.exception(f'Unable to capture: {result["error"]}')
-            if url:
-                logger.warning(f'Unable to capture {url}: {result["error"]}')
-            else:
-                logger.warning(f'Unable to capture: {result["error"]}')
+            logger.warning(result["error"])
         except Exception as e:
             msg = f'Something unexpected happened with {url}: {e}'
             result = {'error': msg}
