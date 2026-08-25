@@ -95,6 +95,7 @@ class CaptureResponseJson(TypedDict, total=False):
     downloaded_file: str | None
     children: list[CaptureResponseJson] | None
     trusted_timestamps: dict[str, str] | None
+    console_messages: list[dict[str, str | int | float]] | None
     runtime: float | None
     potential_favicons: list[str] | None
 

@@ -912,6 +912,8 @@ class LacusCore():
                 hash_to_set['frames'] = pickle.dumps(results['frames'])
             if results.get('trusted_timestamps'):
                 hash_to_set['trusted_timestamps'] = pickle.dumps(results['trusted_timestamps'])
+            if results.get('console_messages'):
+                hash_to_set['console_messages'] = pickle.dumps(results['console_messages'])
             if 'children' in results and results['children'] is not None:
                 padding_length = len(str(len(results['children'])))
                 children = set()
@@ -933,7 +935,7 @@ class LacusCore():
 
         for key in results.keys():
             if key in ['har', 'cookies', 'storage', 'trusted_timestamps', 'potential_favicons',
-                       'html', 'frames', 'children'] or not results.get(key):
+                       'html', 'frames', 'children', 'console_messages'] or not results.get(key):
                 continue
             value = results[key]  # type: ignore[literal-required]
             # These entries can usually be stored directly, but Redis hash values
@@ -975,6 +977,8 @@ class LacusCore():
                 to_return['potential_favicons'] = pickle.loads(value)
             elif key == b'trusted_timestamps':
                 to_return['trusted_timestamps'] = pickle.loads(value)
+            elif key == b'console_messages':
+                to_return['console_messages'] = pickle.loads(value)
             elif key == b'frames':
                 to_return['frames'] = pickle.loads(value)
             elif key == b'children':
