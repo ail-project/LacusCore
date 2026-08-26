@@ -708,28 +708,39 @@ class LacusCore():
                 splitted_url = urlsplit(url)
             except Exception as e:
                 raise CaptureError(f'Invalid URL: {url} - {e}') from e
+
             if self.tor_proxy:
+                # NOTE: we can have a proxy set to the tor proxy *and* not have an onion
+                is_onion = (splitted_url.netloc and splitted_url.hostname and splitted_url.hostname.split('.')[-1] == 'onion')
                 # check if onion or forced
-                if (to_capture.proxy == 'force_tor'  # if the proxy is set to "force_tor", we use the pre-configured tor proxy, regardless the URL, legacy feature.
-                        or (not to_capture.proxy  # if the TLD is "onion", we use the pre-configured tor proxy
-                            and splitted_url.netloc
-                            and splitted_url.hostname
-                            and splitted_url.hostname.split('.')[-1] == 'onion')):
-                    if not _check_proxy_port_open(self.tor_proxy):
-                        logger.critical(f'Unable to connect to the default tor proxy: {self.tor_proxy}')
-                        raise CaptureError('The selected tor proxy is unreachable, unable to run the capture.')
+                if to_capture.proxy == 'force_tor':
+                    # if the proxy is set to "force_tor", we use the pre-configured tor proxy, regardless the URL, legacy feature.
                     to_capture.proxy = self.tor_proxy
-                    logger.info('Using the default tor proxy.')
+                elif is_onion:
+                    # if the TLD is "onion", we use the pre-configured tor proxy
+                    if (to_capture.proxy
+                            and ((isinstance(to_capture.proxy, dict) and to_capture.proxy.get('server') != self.tor_proxy)
+                                 or (isinstance(to_capture, str) and to_capture.proxy != self.tor_proxy))):
+                        # revert to tor proxy, with a message
+                        logger.warning('Attempted to use a non-tor proxy to capture an onion, revert to default tor proxy')
+                    to_capture.proxy = self.tor_proxy
+
             if self.i2p_proxy:
-                if (not to_capture.proxy  # if the TLD is "i2p", we use the pre-configured I2P proxy
-                        and splitted_url.netloc
-                        and splitted_url.hostname
-                        and splitted_url.hostname.split('.')[-1] == 'i2p'):
-                    if not _check_proxy_port_open(self.i2p_proxy):
-                        logger.critical(f'Unable to connect to the default tor proxy: {self.i2p_proxy}')
-                        raise CaptureError('The selected I2P proxy is unreachable, unable to run the capture.')
+                is_i2p = (splitted_url.netloc and splitted_url.hostname and splitted_url.hostname.split('.')[-1] == 'i2p')
+                # if the TLD is "i2p", we use the pre-configured I2P proxy
+                if is_i2p:
+                    if (to_capture.proxy
+                            and ((isinstance(to_capture.proxy, dict) and to_capture.proxy.get('server') != self.i2p_proxy)
+                                 or (isinstance(to_capture, str) and to_capture.proxy != self.i2p_proxy))):
+                        # revert to i2p proxy, with a message
+                        logger.warning('Attempted to use a non-i2p proxy to capture an i2p, revert to default i2p proxy')
                     to_capture.proxy = self.i2p_proxy
-                    logger.info('Using the default I2P proxy.')
+
+            if to_capture.proxy:
+                # check if the proxy is reachable
+                if not _check_proxy_port_open(to_capture.proxy):
+                    logger.critical(f'Unable to connect to the proxy: {to_capture.proxy}')
+                    raise CaptureError('The selected proxy is unreachable, unable to run the capture.')
 
             if self.only_global_lookups and not to_capture.proxy and splitted_url.scheme not in ['data', 'file']:
                 # not relevant if we also have a proxy, or the thing to capture is a data URI or a file on disk
