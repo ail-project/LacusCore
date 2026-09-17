@@ -30,7 +30,8 @@ from dns.exception import DNSException
 from dns.exception import Timeout as DNSTimeout
 
 from lookyloo_models import (CaptureSettingsError, CaptureSettings, ViewportSettings,
-                             GeolocationSettings, HttpCredentialsSettings, Cookie)
+                             GeolocationSettings, HttpCredentialsSettings, Cookie,
+                             ProxySettings, StorageStateSettings)
 from playwrightcapture import (Capture, PlaywrightCaptureException, InvalidPlaywrightParameter,
                                TrustedTimestampSettings, get_devices)
 from pydantic import ValidationError
@@ -90,7 +91,7 @@ def _check_proxy_port_open(proxy: dict[str, str] | str) -> bool:
         to_check = proxy
     splitted_proxy_url = urlsplit(to_check)
     if not splitted_proxy_url.hostname or not splitted_proxy_url.port:
-        raise LacusCoreException('Invalid pre-defined proxy (needs hostname and port): {proxy}')
+        raise LacusCoreException(f'Invalid pre-defined proxy (needs hostname and port): {proxy} / {to_check}')
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(3)
         return s.connect_ex((splitted_proxy_url.hostname, splitted_proxy_url.port)) == 0
@@ -166,11 +167,11 @@ class LacusCore():
                 depth: int=0,
                 browser: BROWSER | None=None, device_name: str | None=None,
                 user_agent: str | None=None,
-                proxy: str | dict[str, str] | None=None,
+                proxy: ProxySettings | str | dict[str, str] | None=None,
                 socks5_dns_resolver: str | list[str] | None=None,
                 general_timeout_in_sec: int | None=None,
                 cookies: list[dict[str, Any]] | list[Cookie] | None=None,
-                storage: dict[str, Any] | None=None,
+                storage: StorageStateSettings | dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | HttpCredentialsSettings | None=None,
                 geolocation: dict[str, str | int | float] | GeolocationSettings | None=None,
@@ -204,11 +205,11 @@ class LacusCore():
                 depth: int=0,
                 browser: BROWSER | None=None, device_name: str | None=None,
                 user_agent: str | None=None,
-                proxy: str | dict[str, str] | None=None,
+                proxy: ProxySettings | str | dict[str, str] | None=None,
                 socks5_dns_resolver: str | list[str] | None=None,
                 general_timeout_in_sec: int | None=None,
                 cookies: str | dict[str, str] | list[dict[str, Any]] | list[Cookie] | None=None,
-                storage: dict[str, Any] | None=None,
+                storage: StorageStateSettings | dict[str, Any] | None=None,
                 headers: dict[str, str] | None=None,
                 http_credentials: dict[str, str] | HttpCredentialsSettings | None=None,
                 geolocation: dict[str, str | int | float] | GeolocationSettings | None=None,
@@ -715,30 +716,30 @@ class LacusCore():
                 # check if onion or forced
                 if to_capture.proxy == 'force_tor':
                     # if the proxy is set to "force_tor", we use the pre-configured tor proxy, regardless the URL, legacy feature.
-                    to_capture.proxy = self.tor_proxy
+                    to_capture.proxy = ProxySettings.model_validate(self.tor_proxy)
                 elif is_onion:
                     # if the TLD is "onion", we use the pre-configured tor proxy
-                    if (to_capture.proxy
-                            and ((isinstance(to_capture.proxy, dict) and to_capture.proxy.get('server') != self.tor_proxy)
-                                 or (isinstance(to_capture, str) and to_capture.proxy != self.tor_proxy))):
+                    if to_capture.proxy and to_capture.proxy.model_dump(exclude_none=True) != self.tor_proxy:
                         # revert to tor proxy, with a message
-                        logger.warning('Attempted to use a non-tor proxy to capture an onion, revert to default tor proxy')
-                    to_capture.proxy = self.tor_proxy
+                        print(self.tor_proxy)
+                        logger.warning(f'Attempted to use a non-tor proxy ({to_capture.proxy.server}) to capture an onion, revert to default tor proxy')
+                    to_capture.proxy = ProxySettings.model_validate(self.tor_proxy)
 
             if self.i2p_proxy:
                 is_i2p = (splitted_url.netloc and splitted_url.hostname and splitted_url.hostname.split('.')[-1] == 'i2p')
                 # if the TLD is "i2p", we use the pre-configured I2P proxy
                 if is_i2p:
-                    if (to_capture.proxy
-                            and ((isinstance(to_capture.proxy, dict) and to_capture.proxy.get('server') != self.i2p_proxy)
-                                 or (isinstance(to_capture, str) and to_capture.proxy != self.i2p_proxy))):
+                    if to_capture.proxy == 'force_tor':
+                        # cannot force tor on a i2p url. Warn and revert.
+                        logger.warning('Attempted force tor proxy to capture an i2p, revert to default i2p proxy')
+                    elif to_capture.proxy and to_capture.proxy.model_dump(exclude_none=True) != self.i2p_proxy:
                         # revert to i2p proxy, with a message
-                        logger.warning('Attempted to use a non-i2p proxy to capture an i2p, revert to default i2p proxy')
-                    to_capture.proxy = self.i2p_proxy
+                        logger.warning(f'Attempted to use a non-i2p proxy ({to_capture.proxy.server}) to capture an i2p, revert to default i2p proxy')
+                    to_capture.proxy = ProxySettings.model_validate(self.i2p_proxy)
 
             if to_capture.proxy:
                 # check if the proxy is reachable
-                if not _check_proxy_port_open(to_capture.proxy):
+                if not _check_proxy_port_open(to_capture.proxy.server):  # type: ignore[union-attr]
                     logger.critical(f'Unable to connect to the proxy: {to_capture.proxy}')
                     raise CaptureError('The selected proxy is unreachable, unable to run the capture.')
 
