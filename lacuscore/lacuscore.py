@@ -704,7 +704,6 @@ class LacusCore():
                     # if the TLD is "onion", we use the pre-configured tor proxy
                     if to_capture.proxy and to_capture.proxy.model_dump(exclude_none=True) != self.tor_proxy:
                         # revert to tor proxy, with a message
-                        print(self.tor_proxy)
                         logger.warning(f'Attempted to use a non-tor proxy ({to_capture.proxy.server}) to capture an onion, revert to default tor proxy')
                     to_capture.proxy = ProxySettings.model_validate(self.tor_proxy)
 
