@@ -184,6 +184,7 @@ class LacusCore():
                 rendered_hostname_only: bool=True,
                 with_screenshot: bool=True,
                 with_favicon: bool=False,
+                with_video: bool=False,
                 with_trusted_timestamps: bool=False,
                 allow_tracking: bool=False,
                 headless: bool=True,
@@ -222,6 +223,7 @@ class LacusCore():
                 rendered_hostname_only: bool=True,
                 with_screenshot: bool=True,
                 with_favicon: bool=False,
+                with_video: bool=False,
                 with_trusted_timestamps: bool=False,
                 allow_tracking: bool=False,
                 headless: bool=True,
@@ -262,6 +264,7 @@ class LacusCore():
         :param rendered_hostname_only: If depth > 0: only capture URLs with the same hostname as the rendered page
         :param with_screenshot: If False, PlaywrightCapture won't take a screenshot of the rendered URL
         :param with_favicon: If True, PlaywrightCapture will attempt to get the potential favicons for the rendered URL. It is a dirty trick, see this issue for details: https://github.com/Lookyloo/PlaywrightCapture/issues/45
+        :param with_video: If True, PlaywrightCapture will capture a video of the capture
         :param with_trusted_timestamps: If True, PlaywrightCapture will trigger calls to a remote timestamp service. For that to work, this class must have been initialized with tt_settings. See RFC3161 for details: https://www.rfc-editor.org/rfc/rfc3161
         :param allow_tracking: If True, PlaywrightCapture will attempt to click through the cookie banners. It is totally dependent on the framework used on the website.
         :param remote_headfull: If True, the capture will be handled as a remote headfull session.
@@ -290,6 +293,7 @@ class LacusCore():
                         'color_scheme': color_scheme, 'java_script_enabled': java_script_enabled,
                         'viewport': viewport, 'referer': referer,
                         'with_screenshot': with_screenshot, 'with_favicon': with_favicon,
+                        'with_video': with_video,
                         'with_trusted_timestamps': with_trusted_timestamps,
                         'allow_tracking': allow_tracking,
                         'uuid': uuid,
@@ -351,6 +355,8 @@ class LacusCore():
             encoded_capture['png'] = b64encode(capture['png']).decode()
         if capture.get('downloaded_file') is not None and capture['downloaded_file'] is not None:  # the second part is not needed, but makes mypy happy
             encoded_capture['downloaded_file'] = b64encode(capture['downloaded_file']).decode()
+        if capture.get('video_file') is not None and capture['video_file'] is not None:  # the second part is not needed, but makes mypy happy
+            encoded_capture['video_file'] = b64encode(capture['video_file']).decode()
         if capture.get('children') and capture['children']:
             encoded_capture['children'] = [self._encode_response(child) for child in capture['children']]
 
@@ -924,8 +930,9 @@ class LacusCore():
             logger.exception('Error while pickling the results.')
             results['error'] = "Error while saving the results (unable to pickle), please retry."
 
-        direct_text_fields = {'last_redirected_url', 'error', 'error_name', 'html', 'downloaded_filename'}
-        direct_bytes_fields = {'png', 'downloaded_file'}
+        direct_text_fields = {'last_redirected_url', 'error', 'error_name', 'html',
+                              'downloaded_filename', 'video_filename'}
+        direct_bytes_fields = {'png', 'downloaded_file', 'video_file'}
 
         for key in results.keys():
             if key in ['har', 'cookies', 'storage', 'trusted_timestamps', 'potential_favicons',
@@ -986,10 +993,11 @@ class LacusCore():
             elif key in [b'runtime']:
                 # The value is a float
                 to_return[key.decode()] = float(value)  # type: ignore[literal-required]
-            elif key in [b'last_redirected_url', b'error', b'error_name', b'html', b'downloaded_filename']:
+            elif key in [b'last_redirected_url', b'error', b'error_name', b'html',
+                         b'downloaded_filename', b'video_filename']:
                 # the value is a string
                 to_return[key.decode()] = value.decode()  # type: ignore[literal-required]
-            elif key in [b'png', b'downloaded_file']:
+            elif key in [b'png', b'downloaded_file', b'video_file']:
                 # the value is bytes
                 to_return[key.decode()] = value  # type: ignore[literal-required]
             else:

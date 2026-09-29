@@ -93,6 +93,8 @@ class CaptureResponseJson(TypedDict, total=False):
     png: str | None
     downloaded_filename: str | None
     downloaded_file: str | None
+    video_filename: str | None
+    video_file: str | None
     children: list[CaptureResponseJson] | None
     trusted_timestamps: dict[str, str] | None
     console_messages: list[dict[str, str | int | float]] | None
