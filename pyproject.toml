@@ -14,13 +14,14 @@ requires-python = ">=3.10,<3.15"
 dynamic = [ "classifiers" ]
 
 dependencies = [
-    "playwrightcapture[recaptcha] (>=1.41.8)",
+    "playwrightcapture[recaptcha] (>=1.42.2)",
     "redis[hiredis] (>=5.3.0,<6.0.0)",
-    "dnspython (>=2.8.0)",
+    "dnspython (>=2.8.0,<2.9.0) ; python_version == '3.10'",
+    "dnspython (>=2.9.0,<3.0.0) ; python_version >= \"3.11\" and python_version < \"4.0\"",
     "async-timeout (>=5.0.1) ; python_version < \"3.11\"",
-    "pydantic (>=2.13.5)",
+    "pydantic (>=2.14.1)",
     "typing-extensions (>=4.12.2,<5.0.0) ; python_version < \"3.12\"",
-    "lookyloo-models (>=0.4.6)"
+    "lookyloo-models (>=0.4.7)"
 ]
 
 [project.urls]
@@ -46,7 +47,7 @@ docs = ["Sphinx (>=9.1.0) ; python_version >= \"3.12\""]
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.4.0"
 types-redis = {version = "^4.6.0.20241004"}
-types-requests = "^2.33.0.20260906"
+types-requests = "^2.33.0.20261006"
 types-beautifulsoup4 = "^4.12.0.20250516"
 pytest = "^9.1.1"
 
