@@ -188,6 +188,7 @@ class XpraSessionManager(SessionManager):
             '--open-url=no',
             '--printing=no',
             '--clipboard=no',
+            '--max-size=1920x1080',
             f'--bind={socket_path}',
             f'--session-name={session_name}',
             f'--displayfd={write_fd}',
