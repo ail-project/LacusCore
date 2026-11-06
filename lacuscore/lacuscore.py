@@ -10,7 +10,6 @@ import pickle
 import random
 import re
 import socket
-import sys
 import time
 import unicodedata
 
@@ -49,6 +48,7 @@ from .session import SessionManager
 from .xpra_session import XpraSessionManager
 
 from asyncio import timeout
+
 
 def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
     if timeout_cm.expired():
@@ -729,13 +729,20 @@ class LacusCore():
                     if splitted_url.hostname and splitted_url.hostname.split('.')[-1] not in ['onion', 'i2p']:
                         ips_to_check = []
                         # check if the hostname is an IP
+                        bin_ip = b''
                         try:
-                            if splitted_url.hostname.isdigit():
-                                _ip = ip_address(int(splitted_url.hostname))
-                            else:
-                                _ip = ip_address(splitted_url.hostname)
-                            ips_to_check.append(_ip)
-                        except ValueError:
+                            bin_ip = socket.inet_pton(socket.AF_INET6, splitted_url.hostname)
+                        except OSError:
+                            # not an IPV6
+                            pass
+                        try:
+                            bin_ip = socket.inet_aton(splitted_url.hostname)
+                        except OSError:
+                            # not an IPV4
+                            pass
+                        if bin_ip:
+                            ips_to_check.append(ip_address(bin_ip))
+                        else:
                             # not an IP, try resolving
                             try:
                                 ips_to_check = await self.__get_ips(logger, splitted_url.hostname)
