@@ -48,19 +48,11 @@ from .helpers import (
 from .session import SessionManager
 from .xpra_session import XpraSessionManager
 
-if sys.version_info < (3, 11):
-    from async_timeout import timeout
+from asyncio import timeout
 
-    def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
-        if timeout_cm.expired:
-            logger.warning(f'Timeout expired: {error_message}')
-
-else:
-    from asyncio import timeout
-
-    def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
-        if timeout_cm.expired():
-            logger.warning(f'Timeout expired: {error_message}')
+def timeout_expired(timeout_cm, logger, error_message: str) -> None:  # type: ignore[no-untyped-def]
+    if timeout_cm.expired():
+        logger.warning(f'Timeout expired: {error_message}')
 
 
 BROWSER = Literal['chromium', 'firefox', 'webkit']
@@ -738,7 +730,10 @@ class LacusCore():
                         ips_to_check = []
                         # check if the hostname is an IP
                         try:
-                            _ip = ip_address(splitted_url.hostname)
+                            if splitted_url.hostname.isdigit():
+                                _ip = ip_address(int(splitted_url.hostname))
+                            else:
+                                _ip = ip_address(splitted_url.hostname)
                             ips_to_check.append(_ip)
                         except ValueError:
                             # not an IP, try resolving
