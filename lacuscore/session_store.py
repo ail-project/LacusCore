@@ -95,7 +95,6 @@ class SessionMetadataStore:
         backend_key = self.backend_key(uuid, core_metadata['backend_type'])
         raw_backend_metadata = self.redis.hgetall(backend_key)
         backend_metadata = self._decode_hash(raw_backend_metadata) if raw_backend_metadata else {}
-
         return StoredSessionRecord(
             metadata=cast(SessionMetadata, core_metadata),
             backend_metadata=backend_metadata,
