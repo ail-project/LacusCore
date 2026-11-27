@@ -329,6 +329,12 @@ class LacusCore():
             self.master_logger.warning('Cannot trigger trusted timestamp, the remote timestamper service settings are missing.')
             to_enqueue.with_trusted_timestamps = False
 
+        if recapture_interval < 60:
+            # make sure it is a sane value, 30s is more or less the time a capture takes
+            # there is really no reason to trigger the same capture twice a minute
+            # But it can be ignored if force=True anyway
+            recapture_interval = 60
+
         p = self.redis.pipeline()
         p.set(f'lacus:query_hash:{hash_query}', perma_uuid, nx=True, ex=recapture_interval)
         p.hset(f'lacus:capture_settings:{perma_uuid}', mapping=to_enqueue.redis_dump())
